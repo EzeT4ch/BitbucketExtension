@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0-windows</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <AssemblyName>ClientExtension</AssemblyName>
+        <RootNamespace>ClientExtension</RootNamespace>
+        <DeployExtension Condition="'$(Configuration)' == 'Debug'">true</DeployExtension>
+        <UserSecretsId>7b6b6a5e-9a2f-4d3a-9a4e-3c9e2f6a4b1a</UserSecretsId>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <PackageReference Include="Microsoft.VisualStudio.Extensibility.Build" Version="17.14.40608" PrivateAssets="all" />
+      <PackageReference Include="Microsoft.VisualStudio.Extensibility.Sdk" Version="17.14.40608" />
+      <PackageReference Include="Microsoft.Extensions.Configuration" Version="9.0.0" />
+      <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="9.0.0" />
+      <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="9.0.0" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\RequestAdapter\RequestAdapter.csproj" />
+      <ProjectReference Include="..\BitbucketAdapter\BitbucketAdapter.csproj" />
+    </ItemGroup>
+
+</Project>

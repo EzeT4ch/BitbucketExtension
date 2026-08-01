@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="ClientExtensión/ClientExtensión.csproj" />
+  <Project Path="BitbucketAdapter/BitbucketAdapter.csproj" />
+  <Project Path="JiraAdapter/JiraAdapter.csproj" />
+  <Project Path="RequestAdapter/RequestAdapter.csproj" />
+</Solution>

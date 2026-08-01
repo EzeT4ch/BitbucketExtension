@@ -1,0 +1,5 @@
+{
+  "ClientExtension.ShowBitbucketConnectionStatusCommand.DisplayName": "Bitbucket: Mostrar estado de conexión",
+  "ClientExtension.UseBitbucketAppPasswordCommand.DisplayName": "Bitbucket: Usar App Password",
+  "ClientExtension.UseBitbucketOAuthCommand.DisplayName": "Bitbucket: Usar OAuth 2.0"
+}
