@@ -16,4 +16,6 @@ internal sealed class FixedBitbucketAuthMethodStore : IBitbucketAuthMethodStore
         Task.FromResult<BitbucketAuthMethod?>(_method);
 
     public Task SaveAsync(BitbucketAuthMethod method, CancellationToken cancellationToken) => Task.CompletedTask;
+
+    public Task ClearAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 }

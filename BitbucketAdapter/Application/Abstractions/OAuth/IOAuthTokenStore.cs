@@ -7,4 +7,6 @@ public interface IOAuthTokenStore
     Task<OAuthToken?> GetAsync(CancellationToken cancellationToken);
 
     Task SaveAsync(OAuthToken token, CancellationToken cancellationToken);
+
+    Task DeleteAsync(CancellationToken cancellationToken);
 }

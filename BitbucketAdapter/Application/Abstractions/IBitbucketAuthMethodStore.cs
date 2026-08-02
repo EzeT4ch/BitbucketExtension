@@ -7,4 +7,6 @@ public interface IBitbucketAuthMethodStore
     Task<BitbucketAuthMethod?> GetAsync(CancellationToken cancellationToken);
 
     Task SaveAsync(BitbucketAuthMethod method, CancellationToken cancellationToken);
+
+    Task ClearAsync(CancellationToken cancellationToken);
 }

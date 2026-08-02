@@ -46,4 +46,16 @@ public sealed class FileBitbucketAuthMethodStore : IBitbucketAuthMethodStore
 
         await File.WriteAllTextAsync(_filePath, JsonSerializer.Serialize(method), cancellationToken);
     }
+
+    public Task ClearAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (File.Exists(_filePath))
+        {
+            File.Delete(_filePath);
+        }
+
+        return Task.CompletedTask;
+    }
 }

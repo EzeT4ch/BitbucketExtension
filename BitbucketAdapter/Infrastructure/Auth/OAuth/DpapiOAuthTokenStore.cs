@@ -52,4 +52,16 @@ public sealed class DpapiOAuthTokenStore : IOAuthTokenStore
         var encryptedBytes = ProtectedData.Protect(jsonBytes, null, DataProtectionScope.CurrentUser);
         await File.WriteAllBytesAsync(_filePath, encryptedBytes, cancellationToken);
     }
+
+    public Task DeleteAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (File.Exists(_filePath))
+        {
+            File.Delete(_filePath);
+        }
+
+        return Task.CompletedTask;
+    }
 }

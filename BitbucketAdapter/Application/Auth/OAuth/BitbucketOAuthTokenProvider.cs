@@ -4,7 +4,7 @@ using BitbucketAdapter.Domain.Exceptions;
 
 namespace BitbucketAdapter.Application.Auth.OAuth;
 
-public sealed class BitbucketOAuthTokenProvider
+public sealed class BitbucketOAuthTokenProvider : IBitbucketOAuthTokenProvider
 {
     private readonly IOAuthTokenStore _tokenStore;
     private readonly IOAuthTokenExchangeClient _tokenExchangeClient;

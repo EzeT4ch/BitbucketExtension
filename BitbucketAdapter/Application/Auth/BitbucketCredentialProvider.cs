@@ -1,4 +1,5 @@
 using BitbucketAdapter.Application.Abstractions;
+using BitbucketAdapter.Application.Abstractions.OAuth;
 using BitbucketAdapter.Application.Auth.AppPassword;
 using BitbucketAdapter.Application.Auth.OAuth;
 using BitbucketAdapter.Domain.Auth;
@@ -11,16 +12,16 @@ public sealed class BitbucketCredentialProvider
 {
     private readonly IBitbucketAuthMethodStore _methodStore;
     private readonly BitbucketAppPasswordProvider _appPasswordProvider;
-    private readonly Lazy<BitbucketOAuthTokenProvider> _oAuthTokenProvider;
+    private readonly Lazy<IBitbucketOAuthTokenProvider> _oAuthTokenProvider;
 
     public BitbucketCredentialProvider(
         IBitbucketAuthMethodStore methodStore,
         BitbucketAppPasswordProvider appPasswordProvider,
-        Func<BitbucketOAuthTokenProvider> oAuthTokenProviderFactory)
+        Func<IBitbucketOAuthTokenProvider> oAuthTokenProviderFactory)
     {
         _methodStore = methodStore;
         _appPasswordProvider = appPasswordProvider;
-        _oAuthTokenProvider = new Lazy<BitbucketOAuthTokenProvider>(oAuthTokenProviderFactory);
+        _oAuthTokenProvider = new Lazy<IBitbucketOAuthTokenProvider>(oAuthTokenProviderFactory);
     }
 
     public async Task<AuthCredential> GetCredentialAsync(CancellationToken cancellationToken)

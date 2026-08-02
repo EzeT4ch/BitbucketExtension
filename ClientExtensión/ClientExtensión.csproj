@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>net10.0-windows</TargetFramework>
+        <TargetFramework>net8.0-windows</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <AssemblyName>ClientExtension</AssemblyName>
@@ -13,14 +13,18 @@
     <ItemGroup>
       <PackageReference Include="Microsoft.VisualStudio.Extensibility.Build" Version="17.14.40608" PrivateAssets="all" />
       <PackageReference Include="Microsoft.VisualStudio.Extensibility.Sdk" Version="17.14.40608" />
-      <PackageReference Include="Microsoft.Extensions.Configuration" Version="9.0.0" />
-      <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="9.0.0" />
-      <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="9.0.0" />
+      <PackageReference Include="Microsoft.Extensions.Configuration" Version="8.0.0" />
+      <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="8.0.0" />
+      <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="8.0.0" />
     </ItemGroup>
 
     <ItemGroup>
       <ProjectReference Include="..\RequestAdapter\RequestAdapter.csproj" />
       <ProjectReference Include="..\BitbucketAdapter\BitbucketAdapter.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <EmbeddedResource Include="Presentation\IntegrationHub\IntegrationHubControl.xaml" />
     </ItemGroup>
 
 </Project>

@@ -1,5 +1,7 @@
 {
   "ClientExtension.ShowBitbucketConnectionStatusCommand.DisplayName": "Bitbucket: Mostrar estado de conexión",
+  "ClientExtension.DeleteBitbucketOAuthTokenCommand.DisplayName": "Bitbucket: Eliminar token",
+  "ClientExtension.ShowIntegrationHubCommand.DisplayName": "Abrir Centro de integraciones",
   "ClientExtension.UseBitbucketAppPasswordCommand.DisplayName": "Bitbucket: Usar App Password",
   "ClientExtension.UseBitbucketOAuthCommand.DisplayName": "Bitbucket: Usar OAuth 2.0"
 }

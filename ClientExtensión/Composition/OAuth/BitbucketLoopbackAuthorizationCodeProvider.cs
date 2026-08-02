@@ -85,8 +85,19 @@ internal sealed class BitbucketLoopbackAuthorizationCodeProvider : IAuthorizatio
         }
     }
 
-    private static void OpenInDefaultBrowser(Uri uri) =>
-        Process.Start(new ProcessStartInfo(uri.ToString()) { UseShellExecute = true });
+    private static void OpenInDefaultBrowser(Uri uri)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(uri.ToString()) { UseShellExecute = true });
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            throw new BitbucketAuthenticationException(
+                "No se pudo abrir el navegador predeterminado para iniciar sesión en Bitbucket.",
+                exception);
+        }
+    }
 
     private static async Task RespondAsync(HttpListenerContext context, bool isError)
     {

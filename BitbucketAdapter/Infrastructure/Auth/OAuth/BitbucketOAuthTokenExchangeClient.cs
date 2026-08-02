@@ -24,7 +24,11 @@ public sealed class BitbucketOAuthTokenExchangeClient : IOAuthTokenExchangeClien
     public Task<OAuthToken> ExchangeAuthorizationCodeAsync(string authorizationCode,
         CancellationToken cancellationToken)
     {
-        var body = $"grant_type=authorization_code&code={Uri.EscapeDataString(authorizationCode)}";
+        var body = string.Join(
+            '&',
+            "grant_type=authorization_code",
+            $"code={Uri.EscapeDataString(authorizationCode)}",
+            $"redirect_uri={Uri.EscapeDataString(_consumer.RedirectUri)}");
         return SendTokenRequestAsync(body, cancellationToken);
     }
 

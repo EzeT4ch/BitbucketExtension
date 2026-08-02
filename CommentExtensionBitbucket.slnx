@@ -3,4 +3,7 @@
   <Project Path="BitbucketAdapter/BitbucketAdapter.csproj" />
   <Project Path="JiraAdapter/JiraAdapter.csproj" />
   <Project Path="RequestAdapter/RequestAdapter.csproj" />
+  <Folder Name="/UnitTest/">
+    <Project Path="BitbucketAdapter.Tests/BitbucketAdapter.Tests.csproj" />
+  </Folder>
 </Solution>
