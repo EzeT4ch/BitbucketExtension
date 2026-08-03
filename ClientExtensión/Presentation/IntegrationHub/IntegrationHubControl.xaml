@@ -31,6 +31,15 @@
                     <StackPanel Margin="12">
                         <TextBlock Text="{Binding BitbucketDescription}"
                                    TextWrapping="Wrap" />
+                        <TextBlock Margin="0,12,0,4"
+                                   FontWeight="SemiBold"
+                                   Text="Workspace" />
+                        <ComboBox MinWidth="180"
+                                  ItemsSource="{Binding BitbucketWorkspaces}"
+                                  DisplayMemberPath="Slug"
+                                  SelectedValuePath="Slug"
+                                  SelectedValue="{Binding SelectedWorkspaceSlug, Mode=TwoWay}"
+                                  IsEnabled="{Binding IsBitbucketWorkspaceSelectorEnabled}" />
                         <TextBlock Margin="0,12,0,0"
                                    FontStyle="Italic"
                                    Text="{Binding BitbucketStatus}"

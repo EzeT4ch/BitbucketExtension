@@ -7,11 +7,14 @@ namespace ClientExtension.Presentation.IntegrationHub;
 [VisualStudioContribution]
 internal sealed class IntegrationHubToolWindow : ToolWindow
 {
-    private IntegrationHubData? _dataContext;
+    private readonly IntegrationHubData _dataContext;
 
-    public IntegrationHubToolWindow(VisualStudioExtensibility extensibility)
+    public IntegrationHubToolWindow(
+        VisualStudioExtensibility extensibility,
+        IntegrationHubData dataContext)
         : base(extensibility)
     {
+        _dataContext = dataContext;
         Title = "Centro de integraciones";
     }
 
@@ -22,14 +25,8 @@ internal sealed class IntegrationHubToolWindow : ToolWindow
     };
 
     public override Task InitializeAsync(CancellationToken cancellationToken)
-    {
-        _dataContext = new IntegrationHubData();
-        return Task.CompletedTask;
-    }
+        => Task.CompletedTask;
 
     public override Task<IRemoteUserControl> GetContentAsync(CancellationToken cancellationToken)
-    {
-        var dataContext = _dataContext ?? throw new InvalidOperationException("La pantalla de integraciones no se inicializó.");
-        return Task.FromResult<IRemoteUserControl>(new IntegrationHubControl(dataContext));
-    }
+        => Task.FromResult<IRemoteUserControl>(new IntegrationHubControl(_dataContext));
 }

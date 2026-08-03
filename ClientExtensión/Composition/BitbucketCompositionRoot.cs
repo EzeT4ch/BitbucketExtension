@@ -8,9 +8,11 @@ using BitbucketAdapter.Application.Auth.OAuth;
 using BitbucketAdapter.Infrastructure.Auth;
 using BitbucketAdapter.Infrastructure.Auth.AppPassword;
 using BitbucketAdapter.Infrastructure.Auth.OAuth;
+using BitbucketAdapter.Infrastructure.Workspaces;
 using ClientExtension.Composition.AppPassword;
 using ClientExtension.Composition.OAuth;
 using ClientExtension.Presentation.Bitbucket.Authentication;
+using ClientExtension.Presentation.IntegrationHub;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.VisualStudio.Extensibility;
 using RequestAdapter.Application.Abstractions;
@@ -33,6 +35,9 @@ internal static class BitbucketCompositionRoot
             provider.GetRequiredService<IOAuthTokenStore>()));
         services.AddSingleton<BitbucketAuthenticationCommandVisibility>();
         services.AddSingleton<IBitbucketConnectionStatusService, BitbucketConnectionStatusService>();
+        services.AddSingleton<IBitbucketWorkspaceSelectionStore>(_ => new FileBitbucketWorkspaceSelectionStore());
+        services.AddSingleton<IBitbucketWorkspaceService, BitbucketWorkspaceService>();
+        services.AddSingleton<IntegrationHubData>();
         services.AddSingleton<IHttpRequestSender>(provider => BuildSender(
             provider.GetRequiredService<VisualStudioExtensibility>(),
             provider.GetRequiredService<IBitbucketAuthMethodStore>(),

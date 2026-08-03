@@ -1,6 +1,8 @@
 using System.Diagnostics;
+using BitbucketAdapter.Application.Abstractions;
 using BitbucketAdapter.Application.Abstractions.OAuth;
 using ClientExtension.Presentation.Bitbucket.Authentication;
+using ClientExtension.Presentation.IntegrationHub;
 using Microsoft.VisualStudio.Extensibility;
 using Microsoft.VisualStudio.Extensibility.Commands;
 using Microsoft.VisualStudio.Extensibility.Shell;
@@ -14,15 +16,21 @@ internal sealed class DeleteBitbucketOAuthTokenCommand : Command
 
     private readonly IBitbucketOAuthConnectionService _connectionService;
     private readonly BitbucketAuthenticationCommandVisibility _commandVisibility;
+    private readonly IBitbucketWorkspaceSelectionStore _workspaceSelectionStore;
+    private readonly IntegrationHubData _integrationHubData;
 
     public DeleteBitbucketOAuthTokenCommand(
         VisualStudioExtensibility extensibility,
         IBitbucketOAuthConnectionService connectionService,
-        BitbucketAuthenticationCommandVisibility commandVisibility)
+        BitbucketAuthenticationCommandVisibility commandVisibility,
+        IBitbucketWorkspaceSelectionStore workspaceSelectionStore,
+        IntegrationHubData integrationHubData)
         : base(extensibility)
     {
         _connectionService = connectionService;
         _commandVisibility = commandVisibility;
+        _workspaceSelectionStore = workspaceSelectionStore;
+        _integrationHubData = integrationHubData;
         SetVisibilityState(false);
     }
 
@@ -55,6 +63,8 @@ internal sealed class DeleteBitbucketOAuthTokenCommand : Command
         try
         {
             await _connectionService.DisconnectAsync(cancellationToken);
+            await _workspaceSelectionStore.ClearAsync(cancellationToken);
+            _integrationHubData.ClearWorkspaces();
             await _commandVisibility.RefreshAsync(cancellationToken);
             OpenAppAuthorizationsPage();
             await Extensibility.Shell().ShowPromptAsync(
