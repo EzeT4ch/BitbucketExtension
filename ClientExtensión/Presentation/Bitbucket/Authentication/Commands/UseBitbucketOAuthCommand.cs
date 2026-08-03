@@ -2,7 +2,7 @@ using BitbucketAdapter.Application.Abstractions;
 using BitbucketAdapter.Application.Abstractions.OAuth;
 using BitbucketAdapter.Domain.Exceptions;
 using ClientExtension.Presentation.Bitbucket.Authentication;
-using ClientExtension.Presentation.IntegrationHub;
+using ClientExtension.Presentation.Bitbucket.PullRequests;
 using Microsoft.VisualStudio.Extensibility;
 using Microsoft.VisualStudio.Extensibility.Commands;
 using Microsoft.VisualStudio.Extensibility.Shell;
@@ -14,18 +14,18 @@ internal class UseBitbucketOAuthCommand : Command
 {
     private readonly IBitbucketOAuthConnectionService _connectionService;
     private readonly BitbucketAuthenticationCommandVisibility _commandVisibility;
-    private readonly IntegrationHubData _integrationHubData;
+    private readonly PullRequestSelectionData _pullRequestSelectionData;
 
     public UseBitbucketOAuthCommand(
         VisualStudioExtensibility extensibility,
         IBitbucketOAuthConnectionService connectionService,
         BitbucketAuthenticationCommandVisibility commandVisibility,
-        IntegrationHubData integrationHubData)
+        PullRequestSelectionData pullRequestSelectionData)
         : base(extensibility)
     {
         _connectionService = connectionService;
         _commandVisibility = commandVisibility;
-        _integrationHubData = integrationHubData;
+        _pullRequestSelectionData = pullRequestSelectionData;
     }
 
     public override CommandConfiguration CommandConfiguration => new("%ClientExtension.UseBitbucketOAuthCommand.DisplayName%")
@@ -58,11 +58,11 @@ internal class UseBitbucketOAuthCommand : Command
 
             await _connectionService.ConnectAsync(cancellationToken);
             await _commandVisibility.RefreshAsync(cancellationToken);
-            _integrationHubData.InvalidateWorkspaces();
-            await Extensibility.Shell().ShowToolWindowAsync<IntegrationHubToolWindow>(
+            _pullRequestSelectionData.InvalidateWorkspaces();
+            await Extensibility.Shell().ShowToolWindowAsync<PullRequestSelectionToolWindow>(
                 activate: true,
                 cancellationToken);
-            await _integrationHubData.EnsureWorkspacesLoadedAsync(cancellationToken);
+            await _pullRequestSelectionData.EnsureWorkspacesLoadedAsync(cancellationToken);
             await Extensibility.Shell().ShowPromptAsync(
                 "Bitbucket: OAuth 2.0 conectado correctamente.",
                 PromptOptions.OK,

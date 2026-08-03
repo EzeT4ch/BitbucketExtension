@@ -3,10 +3,10 @@ using System.Runtime.Serialization;
 using BitbucketAdapter.Application.Abstractions;
 using Microsoft.VisualStudio.Extensibility.UI;
 
-namespace ClientExtension.Presentation.IntegrationHub;
+namespace ClientExtension.Presentation.Bitbucket.PullRequests;
 
 [DataContract]
-internal sealed class IntegrationHubData : NotifyPropertyChangedObject
+internal sealed class PullRequestSelectionData : NotifyPropertyChangedObject
 {
     private readonly IBitbucketWorkspaceService _workspaceService;
     private readonly IBitbucketWorkspaceSelectionStore _workspaceSelectionStore;
@@ -14,13 +14,13 @@ internal sealed class IntegrationHubData : NotifyPropertyChangedObject
     private readonly SemaphoreSlim _saveSemaphore = new(1, 1);
 
     private string? _selectedWorkspaceSlug;
-    private string _bitbucketStatus = "Conectá Bitbucket para cargar tus workspaces.";
-    private bool _isBitbucketWorkspaceSelectorEnabled;
+    private string _status = "Conectá Bitbucket para cargar tus workspaces.";
+    private bool _isWorkspaceSelectorEnabled;
     private bool _isLoaded;
     private bool _suppressSelectionPersistence;
     private long _selectionVersion;
 
-    public IntegrationHubData(
+    public PullRequestSelectionData(
         IBitbucketWorkspaceService workspaceService,
         IBitbucketWorkspaceSelectionStore workspaceSelectionStore)
     {
@@ -29,19 +29,20 @@ internal sealed class IntegrationHubData : NotifyPropertyChangedObject
     }
 
     [DataMember]
-    public string Title => "Centro de integraciones";
+    public string Title => "Pull Requests de Bitbucket";
 
     [DataMember]
-    public string Subtitle => "Un único punto de trabajo para Bitbucket y Jira.";
+    public string Subtitle => "Elegí el workspace donde querés consultar y revisar Pull Requests.";
 
     [DataMember]
-    public string BitbucketTitle => "Bitbucket";
+    public string WorkspaceSectionTitle => "Workspace";
 
     [DataMember]
-    public string BitbucketDescription => "Pull requests, revisiones y comentarios del repositorio activo.";
+    public string WorkspaceDescription =>
+        "El workspace seleccionado se usará como contexto para las próximas consultas a Bitbucket.";
 
     [DataMember]
-    public ObservableCollection<BitbucketWorkspaceOption> BitbucketWorkspaces { get; } = [];
+    public ObservableCollection<WorkspaceOption> Workspaces { get; } = [];
 
     [DataMember]
     public string? SelectedWorkspaceSlug
@@ -59,45 +60,36 @@ internal sealed class IntegrationHubData : NotifyPropertyChangedObject
     }
 
     [DataMember]
-    public string BitbucketStatus
+    public string Status
     {
-        get => _bitbucketStatus;
-        private set => SetProperty(ref _bitbucketStatus, value);
+        get => _status;
+        private set => SetProperty(ref _status, value);
     }
 
     [DataMember]
-    public bool IsBitbucketWorkspaceSelectorEnabled
+    public bool IsWorkspaceSelectorEnabled
     {
-        get => _isBitbucketWorkspaceSelectorEnabled;
-        private set => SetProperty(ref _isBitbucketWorkspaceSelectorEnabled, value);
+        get => _isWorkspaceSelectorEnabled;
+        private set => SetProperty(ref _isWorkspaceSelectorEnabled, value);
     }
 
     [DataMember]
-    public string JiraTitle => "Jira";
-
-    [DataMember]
-    public string JiraDescription => "Historias de usuario, tareas y trazabilidad asociada a la rama actual.";
-
-    [DataMember]
-    public string JiraStatus => "Próximamente: conectar datos de incidencias.";
-
-    [DataMember]
-    public string NextStep => "Seleccioná un workspace para continuar con la integración de Bitbucket.";
+    public string NextStep => "Después de elegir un workspace podrás seleccionar el Pull Request a revisar.";
 
     public void InvalidateWorkspaces()
     {
         Interlocked.Increment(ref _selectionVersion);
         _isLoaded = false;
-        IsBitbucketWorkspaceSelectorEnabled = false;
-        BitbucketWorkspaces.Clear();
+        IsWorkspaceSelectorEnabled = false;
+        Workspaces.Clear();
         SetSelectedWorkspaceWithoutSaving(null);
-        BitbucketStatus = "Cargando workspaces de Bitbucket...";
+        Status = "Cargando workspaces de Bitbucket...";
     }
 
     public void ClearWorkspaces()
     {
         InvalidateWorkspaces();
-        BitbucketStatus = "Conectá Bitbucket para cargar tus workspaces.";
+        Status = "Conectá Bitbucket para cargar tus workspaces.";
     }
 
     public async Task EnsureWorkspacesLoadedAsync(CancellationToken cancellationToken)
@@ -115,16 +107,16 @@ internal sealed class IntegrationHubData : NotifyPropertyChangedObject
                 return;
             }
 
-            IsBitbucketWorkspaceSelectorEnabled = false;
-            BitbucketStatus = "Cargando workspaces de Bitbucket...";
+            IsWorkspaceSelectorEnabled = false;
+            Status = "Cargando workspaces de Bitbucket...";
 
             var workspaces = await _workspaceService.GetAllAsync(cancellationToken);
             var savedWorkspaceSlug = await _workspaceSelectionStore.GetAsync(cancellationToken);
 
-            BitbucketWorkspaces.Clear();
+            Workspaces.Clear();
             foreach (var workspace in workspaces)
             {
-                BitbucketWorkspaces.Add(new BitbucketWorkspaceOption(workspace.Slug));
+                Workspaces.Add(new WorkspaceOption(workspace.Slug));
             }
 
             var selectedWorkspaceSlug = workspaces
@@ -140,8 +132,8 @@ internal sealed class IntegrationHubData : NotifyPropertyChangedObject
             }
 
             SetSelectedWorkspaceWithoutSaving(selectedWorkspaceSlug);
-            IsBitbucketWorkspaceSelectorEnabled = workspaces.Count > 0;
-            BitbucketStatus = workspaces.Count switch
+            IsWorkspaceSelectorEnabled = workspaces.Count > 0;
+            Status = workspaces.Count switch
             {
                 0 => "No hay workspaces disponibles para el usuario autenticado.",
                 _ when selectedWorkspaceSlug is not null => $"Workspace seleccionado: {selectedWorkspaceSlug}.",
@@ -151,12 +143,12 @@ internal sealed class IntegrationHubData : NotifyPropertyChangedObject
         }
         catch (OperationCanceledException)
         {
-            BitbucketStatus = "Se canceló la carga de workspaces de Bitbucket.";
+            Status = "Se canceló la carga de workspaces de Bitbucket.";
             throw;
         }
         catch (Exception exception)
         {
-            BitbucketStatus = $"No se pudieron cargar los workspaces de Bitbucket: {exception.Message}";
+            Status = $"No se pudieron cargar los workspaces de Bitbucket: {exception.Message}";
         }
         finally
         {
@@ -183,19 +175,19 @@ internal sealed class IntegrationHubData : NotifyPropertyChangedObject
             if (string.IsNullOrWhiteSpace(workspaceSlug))
             {
                 await _workspaceSelectionStore.ClearAsync(CancellationToken.None);
-                BitbucketStatus = "Seleccioná un workspace. El cambio se guardará automáticamente.";
+                Status = "Seleccioná un workspace. El cambio se guardará automáticamente.";
             }
             else
             {
                 await _workspaceSelectionStore.SaveAsync(workspaceSlug, CancellationToken.None);
-                BitbucketStatus = $"Workspace seleccionado: {workspaceSlug}.";
+                Status = $"Workspace seleccionado: {workspaceSlug}.";
             }
         }
         catch (Exception exception)
         {
             if (version == Volatile.Read(ref _selectionVersion))
             {
-                BitbucketStatus = $"No se pudo guardar el workspace seleccionado: {exception.Message}";
+                Status = $"No se pudo guardar el workspace seleccionado: {exception.Message}";
             }
         }
         finally
@@ -219,9 +211,9 @@ internal sealed class IntegrationHubData : NotifyPropertyChangedObject
 }
 
 [DataContract]
-internal sealed class BitbucketWorkspaceOption
+internal sealed class WorkspaceOption
 {
-    public BitbucketWorkspaceOption(string slug)
+    public WorkspaceOption(string slug)
     {
         Slug = slug;
     }

@@ -1,7 +1,7 @@
 using BitbucketAdapter.Application.Abstractions;
 using BitbucketAdapter.Domain.Auth;
 using ClientExtension.Presentation.Bitbucket.Authentication;
-using ClientExtension.Presentation.IntegrationHub;
+using ClientExtension.Presentation.Bitbucket.PullRequests;
 using Microsoft.VisualStudio.Extensibility;
 using Microsoft.VisualStudio.Extensibility.Commands;
 using Microsoft.VisualStudio.Extensibility.Shell;
@@ -13,18 +13,18 @@ internal class UseBitbucketAppPasswordCommand : Command
 {
     private readonly IBitbucketAuthMethodStore _authMethodStore;
     private readonly BitbucketAuthenticationCommandVisibility _commandVisibility;
-    private readonly IntegrationHubData _integrationHubData;
+    private readonly PullRequestSelectionData _pullRequestSelectionData;
 
     public UseBitbucketAppPasswordCommand(
         VisualStudioExtensibility extensibility,
         IBitbucketAuthMethodStore authMethodStore,
         BitbucketAuthenticationCommandVisibility commandVisibility,
-        IntegrationHubData integrationHubData)
+        PullRequestSelectionData pullRequestSelectionData)
         : base(extensibility)
     {
         _authMethodStore = authMethodStore;
         _commandVisibility = commandVisibility;
-        _integrationHubData = integrationHubData;
+        _pullRequestSelectionData = pullRequestSelectionData;
     }
 
     public override CommandConfiguration CommandConfiguration => new("%ClientExtension.UseBitbucketAppPasswordCommand.DisplayName%")
@@ -46,11 +46,11 @@ internal class UseBitbucketAppPasswordCommand : Command
     {
         await _authMethodStore.SaveAsync(BitbucketAuthMethod.AppPassword, cancellationToken);
         await _commandVisibility.RefreshAsync(cancellationToken);
-        _integrationHubData.InvalidateWorkspaces();
-        await Extensibility.Shell().ShowToolWindowAsync<IntegrationHubToolWindow>(
+        _pullRequestSelectionData.InvalidateWorkspaces();
+        await Extensibility.Shell().ShowToolWindowAsync<PullRequestSelectionToolWindow>(
             activate: true,
             cancellationToken);
-        await _integrationHubData.EnsureWorkspacesLoadedAsync(cancellationToken);
+        await _pullRequestSelectionData.EnsureWorkspacesLoadedAsync(cancellationToken);
         await Extensibility.Shell().ShowPromptAsync(
             "Bitbucket: se usará App Password. Se pedirá usuario y App Password la próxima vez que haga falta conectar.",
             PromptOptions.OK,

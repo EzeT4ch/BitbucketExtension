@@ -1,0 +1,86 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:styles="clr-namespace:Microsoft.VisualStudio.Shell;assembly=Microsoft.VisualStudio.Shell.15.0">
+    <Style x:Key="Layout.TextBase"
+           TargetType="TextBlock">
+        <Setter Property="Foreground"
+                Value="{DynamicResource {x:Static styles:VsBrushes.WindowTextKey}}" />
+        <Setter Property="TextWrapping"
+                Value="Wrap" />
+    </Style>
+
+    <Style TargetType="TextBlock"
+           BasedOn="{StaticResource Layout.TextBase}" />
+
+    <Style TargetType="ComboBox"
+           BasedOn="{StaticResource {x:Static styles:VsResourceKeys.ComboBoxStyleKey}}" />
+
+    <Style x:Key="Layout.PageContainer"
+           TargetType="Grid">
+        <Setter Property="Margin"
+                Value="20" />
+        <Setter Property="MaxWidth"
+                Value="720" />
+        <Setter Property="HorizontalAlignment"
+                Value="Stretch" />
+    </Style>
+
+    <Style x:Key="Layout.PageTitle"
+           TargetType="TextBlock"
+           BasedOn="{StaticResource Layout.TextBase}">
+        <Setter Property="FontSize"
+                Value="20" />
+        <Setter Property="FontWeight"
+                Value="SemiBold" />
+    </Style>
+
+    <Style x:Key="Layout.PageSubtitle"
+           TargetType="TextBlock"
+           BasedOn="{StaticResource Layout.TextBase}">
+        <Setter Property="Margin"
+                Value="0,6,0,0" />
+        <Setter Property="Opacity"
+                Value="0.85" />
+    </Style>
+
+    <Style x:Key="Layout.SectionCard"
+           TargetType="Border">
+        <Setter Property="Padding"
+                Value="16" />
+        <Setter Property="BorderThickness"
+                Value="1" />
+        <Setter Property="BorderBrush"
+                Value="{DynamicResource {x:Static styles:VsBrushes.ControlOutlineKey}}" />
+        <Setter Property="Background"
+                Value="{DynamicResource {x:Static styles:VsBrushes.ToolWindowBackgroundKey}}" />
+        <Setter Property="CornerRadius"
+                Value="3" />
+    </Style>
+
+    <Style x:Key="Layout.SectionTitle"
+           TargetType="TextBlock"
+           BasedOn="{StaticResource Layout.TextBase}">
+        <Setter Property="FontSize"
+                Value="14" />
+        <Setter Property="FontWeight"
+                Value="SemiBold" />
+    </Style>
+
+    <Style x:Key="Layout.BodyText"
+           TargetType="TextBlock"
+           BasedOn="{StaticResource Layout.TextBase}" />
+
+    <Style x:Key="Layout.StatusText"
+           TargetType="TextBlock"
+           BasedOn="{StaticResource Layout.TextBase}">
+        <Setter Property="FontStyle"
+                Value="Italic" />
+    </Style>
+
+    <Style x:Key="Layout.HelperText"
+           TargetType="TextBlock"
+           BasedOn="{StaticResource Layout.TextBase}">
+        <Setter Property="Opacity"
+                Value="0.75" />
+    </Style>
+</ResourceDictionary>

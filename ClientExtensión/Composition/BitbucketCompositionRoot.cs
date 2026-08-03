@@ -12,7 +12,7 @@ using BitbucketAdapter.Infrastructure.Workspaces;
 using ClientExtension.Composition.AppPassword;
 using ClientExtension.Composition.OAuth;
 using ClientExtension.Presentation.Bitbucket.Authentication;
-using ClientExtension.Presentation.IntegrationHub;
+using ClientExtension.Presentation.Bitbucket.PullRequests;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.VisualStudio.Extensibility;
 using RequestAdapter.Application.Abstractions;
@@ -37,7 +37,7 @@ internal static class BitbucketCompositionRoot
         services.AddSingleton<IBitbucketConnectionStatusService, BitbucketConnectionStatusService>();
         services.AddSingleton<IBitbucketWorkspaceSelectionStore>(_ => new FileBitbucketWorkspaceSelectionStore());
         services.AddSingleton<IBitbucketWorkspaceService, BitbucketWorkspaceService>();
-        services.AddSingleton<IntegrationHubData>();
+        services.AddSingleton<PullRequestSelectionData>();
         services.AddSingleton<IHttpRequestSender>(provider => BuildSender(
             provider.GetRequiredService<VisualStudioExtensibility>(),
             provider.GetRequiredService<IBitbucketAuthMethodStore>(),
