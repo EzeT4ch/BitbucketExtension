@@ -16,12 +16,13 @@ using ClientExtension.Composition.AppPassword;
 using ClientExtension.Composition.Documents;
 using ClientExtension.Composition.OAuth;
 using ClientExtension.Presentation.Bitbucket.Authentication;
-using ClientExtension.Presentation.Bitbucket.PullRequests;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.VisualStudio.Extensibility;
 using RequestAdapter.Application.Abstractions;
 using RequestAdapter.Application.Auth;
 using RequestAdapter.Infrastructure.Http;
+using ClientExtension.Presentation.Bitbucket.PullRequests.Diff;
+using ClientExtension.Presentation.Bitbucket.PullRequests.Data;
 
 namespace ClientExtension.Composition;
 
@@ -45,7 +46,12 @@ internal static class BitbucketCompositionRoot
         services.AddSingleton<IBitbucketRepositoryService, BitbucketRepositoryService>();
         services.AddSingleton<IBitbucketPullRequestService, BitbucketPullRequestService>();
         services.AddSingleton<IBitbucketPullRequestChangesService, BitbucketPullRequestChangesService>();
+        services.AddSingleton<IBitbucketPullRequestCommentService, BitbucketPullRequestCommentService>();
+        services.AddSingleton<PullRequestDiffViewData>();
         services.AddSingleton<IPullRequestDiffDocumentService, VisualStudioPullRequestDiffDocumentService>();
+        services.AddSingleton<PullRequestDetailData>();
+        services.AddSingleton<PullRequestFilesData>();
+        services.AddSingleton<PullRequestCommentsData>();
         services.AddSingleton<PullRequestBrowserData>();
         services.AddSingleton<PullRequestSelectionData>();
         services.AddSingleton<IHttpRequestSender>(provider => BuildSender(

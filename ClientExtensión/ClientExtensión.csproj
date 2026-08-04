@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
         <TargetFramework>net8.0-windows</TargetFramework>
@@ -6,7 +6,7 @@
         <Nullable>enable</Nullable>
         <AssemblyName>ClientExtension</AssemblyName>
         <RootNamespace>ClientExtension</RootNamespace>
-        <DeployExtension Condition="'$(Configuration)' == 'Debug'">true</DeployExtension>
+        <DeployExtension Condition="'$(Configuration)' == 'Debug' and '$(BuildingInsideVisualStudio)' == 'true'">true</DeployExtension>
         <UserSecretsId>7b6b6a5e-9a2f-4d3a-9a4e-3c9e2f6a4b1a</UserSecretsId>
     </PropertyGroup>
 
@@ -16,6 +16,7 @@
       <PackageReference Include="Microsoft.Extensions.Configuration" Version="8.0.0" />
       <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="8.0.0" />
       <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="8.0.0" />
+      <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.6.0" />
     </ItemGroup>
 
     <ItemGroup>
@@ -25,6 +26,8 @@
 
     <ItemGroup>
       <EmbeddedResource Include="Presentation\Bitbucket\PullRequests\PullRequestSelectionControl.xaml" />
+      <EmbeddedResource Include="Presentation\Bitbucket\PullRequests\Diff\PullRequestDiffControl.xaml" />
+      <EmbeddedResource Include="Presentation\Bitbucket\PullRequests\Diff\PullRequestDiffResources.xaml" />
       <EmbeddedResource Include="Presentation\Shared\Layout\RemoteUiLayout.xaml" />
     </ItemGroup>
 

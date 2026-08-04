@@ -10,8 +10,19 @@ internal sealed record PullRequestDiffDocument(
     string RepositorySlug,
     long PullRequestId,
     string BeforePath,
-    string BeforeContent,
     string BeforeLabel,
+    string BeforeContent,
     string AfterPath,
+    string AfterLabel,
     string AfterContent,
-    string AfterLabel);
+    string RawDiff,
+    IReadOnlyList<PullRequestDiffComment> Comments);
+
+internal sealed record PullRequestDiffComment(
+    long Id,
+    int? BeforeLine,
+    int? AfterLine,
+    string AuthorDisplayName,
+    string Content,
+    DateTimeOffset? CreatedOn,
+    DateTimeOffset? UpdatedOn);

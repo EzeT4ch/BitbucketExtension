@@ -3,7 +3,7 @@ using System.Runtime.Serialization;
 using BitbucketAdapter.Application.Abstractions;
 using Microsoft.VisualStudio.Extensibility.UI;
 
-namespace ClientExtension.Presentation.Bitbucket.PullRequests;
+namespace ClientExtension.Presentation.Bitbucket.PullRequests.Data;
 
 [DataContract]
 internal sealed class PullRequestSelectionData : NotifyPropertyChangedObject

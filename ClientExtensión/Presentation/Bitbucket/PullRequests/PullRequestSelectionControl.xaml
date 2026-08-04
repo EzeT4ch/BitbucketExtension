@@ -1,6 +1,7 @@
 <DataTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
               xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
               xmlns:styles="clr-namespace:Microsoft.VisualStudio.Shell;assembly=Microsoft.VisualStudio.Shell.15.0"
+              xmlns:colors="clr-namespace:Microsoft.VisualStudio.PlatformUI;assembly=Microsoft.VisualStudio.Shell.15.0"
               xmlns:vs="http://schemas.microsoft.com/visualstudio/extensibility/2022/xaml">
     <Grid Background="{DynamicResource {x:Static styles:VsBrushes.ToolWindowBackgroundKey}}">
         <Grid.RowDefinitions>
@@ -144,16 +145,16 @@
                             BorderThickness="0,0,0,1"
                             BorderBrush="{DynamicResource {x:Static styles:VsBrushes.ControlOutlineKey}}">
                         <TextBlock Style="{DynamicResource Layout.StatusText}"
-                                   Text="{Binding PullRequestBrowser.DetailStatus}" />
+                                   Text="{Binding PullRequestBrowser.Detail.Status}" />
                     </Border>
 
                     <Grid Grid.Row="1">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="1*" MinWidth="220" />
+                            <ColumnDefinition Width="1.25*" MinWidth="280" />
                             <ColumnDefinition Width="5" />
-                            <ColumnDefinition Width="2.2*" MinWidth="320" />
+                            <ColumnDefinition Width="2*" MinWidth="320" />
                             <ColumnDefinition Width="5" />
-                            <ColumnDefinition Width="1.3*" MinWidth="280" />
+                            <ColumnDefinition Width="1.45*" MinWidth="320" />
                         </Grid.ColumnDefinitions>
 
                         <Grid>
@@ -169,59 +170,57 @@
                             <TextBlock Grid.Row="1"
                                        Margin="12,6,12,10"
                                        Style="{DynamicResource Layout.StatusText}"
-                                       Text="{Binding PullRequestBrowser.FilesStatus}" />
+                                       Text="{Binding PullRequestBrowser.Files.Status}" />
 
-                            <ListBox Grid.Row="2"
-                                     Padding="0"
-                                     Background="{DynamicResource {x:Static styles:VsBrushes.ToolWindowBackgroundKey}}"
-                                     BorderThickness="0"
-                                     Foreground="{DynamicResource {x:Static styles:VsBrushes.WindowTextKey}}"
-                                     HorizontalContentAlignment="Stretch"
-                                     ScrollViewer.VerticalScrollBarVisibility="Auto"
-                                     ItemsSource="{Binding PullRequestBrowser.ChangedFiles}"
-                                     SelectedValuePath="Path"
-                                     SelectedValue="{Binding PullRequestBrowser.SelectedChangedFilePath, Mode=TwoWay}"
-                                     IsEnabled="{Binding PullRequestBrowser.IsChangedFileSelectorEnabled}">
-                                <ListBox.ItemTemplate>
-                                    <DataTemplate>
-                                        <Border Padding="10,8"
-                                                BorderThickness="0,0,0,1"
-                                                BorderBrush="{DynamicResource {x:Static styles:VsBrushes.ControlOutlineKey}}">
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="Auto" />
-                                                </Grid.ColumnDefinitions>
-                                                <Grid.RowDefinitions>
-                                                    <RowDefinition Height="Auto" />
-                                                    <RowDefinition Height="Auto" />
-                                                    <RowDefinition Height="Auto" />
-                                                </Grid.RowDefinitions>
+                            <TreeView Grid.Row="2"
+                                      Padding="8,0,8,8"
+                                      Background="{DynamicResource {x:Static styles:VsBrushes.ToolWindowBackgroundKey}}"
+                                      BorderThickness="0"
+                                      Foreground="{DynamicResource {x:Static styles:VsBrushes.WindowTextKey}}"
+                                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                      ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                      ItemsSource="{Binding PullRequestBrowser.Files.Tree}"
+                                      IsEnabled="{Binding PullRequestBrowser.Files.IsSelectorEnabled}">
+                                <TreeView.ItemContainerStyle>
+                                    <Style TargetType="TreeViewItem">
+                                        <Setter Property="Foreground"
+                                                Value="{DynamicResource {x:Static styles:VsBrushes.WindowTextKey}}" />
+                                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                        <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                                        <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
+                                    </Style>
+                                </TreeView.ItemContainerStyle>
 
+                                <TreeView.ItemTemplate>
+                                    <HierarchicalDataTemplate ItemsSource="{Binding Children}">
+                                        <Grid Margin="2,3,4,3">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="24" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+
+                                            <TextBlock VerticalAlignment="Center"
+                                                       Text="{Binding Glyph}" />
+                                            <StackPanel Grid.Column="1">
                                                 <TextBlock FontWeight="SemiBold"
-                                                           Text="{Binding FileName}" />
-                                                <TextBlock Grid.Column="1"
-                                                           Margin="10,0,0,0"
-                                                           Text="{Binding LineSummary}" />
-                                                <TextBlock Grid.Row="1"
-                                                           Grid.ColumnSpan="2"
-                                                           Margin="0,3,0,0"
-                                                           Opacity="0.7"
-                                                           Text="{Binding Directory}" />
-                                                <TextBlock Grid.Row="2"
-                                                           Margin="0,3,0,0"
-                                                           Opacity="0.75"
-                                                           Text="{Binding Change}" />
-                                                <TextBlock Grid.Row="2"
-                                                           Grid.Column="1"
-                                                           Margin="10,3,0,0"
-                                                           Opacity="0.7"
-                                                           Text="{Binding PreviousPath}" />
-                                            </Grid>
-                                        </Border>
-                                    </DataTemplate>
-                                </ListBox.ItemTemplate>
-                            </ListBox>
+                                                           TextTrimming="CharacterEllipsis"
+                                                           Text="{Binding Name}" />
+                                                <TextBlock Margin="0,2,0,0"
+                                                           FontSize="11"
+                                                           Opacity="0.65"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           Text="{Binding Details}" />
+                                            </StackPanel>
+                                            <TextBlock Grid.Column="2"
+                                                       Margin="10,0,0,0"
+                                                       VerticalAlignment="Center"
+                                                       FontWeight="SemiBold"
+                                                       Text="{Binding LineSummary}" />
+                                        </Grid>
+                                    </HierarchicalDataTemplate>
+                                </TreeView.ItemTemplate>
+                            </TreeView>
                         </Grid>
 
                         <GridSplitter Grid.Column="1"
@@ -244,7 +243,7 @@
 
                                 <StackPanel VerticalAlignment="Center">
                                     <TextBlock FontWeight="SemiBold"
-                                               Text="{Binding PullRequestBrowser.SelectedFileTitle}" />
+                                               Text="{Binding PullRequestBrowser.Files.SelectedFileTitle}" />
                                     <TextBlock Margin="0,3,0,0"
                                                Style="{DynamicResource Layout.HelperText}"
                                                Text="Vista previa del diff unificado" />
@@ -254,28 +253,241 @@
                                         Margin="12,0,0,0"
                                         Padding="12,5"
                                         VerticalAlignment="Center"
-                                        Content="Comparar en el editor"
-                                        Command="{Binding PullRequestBrowser.OpenDiffDocumentCommand}"
-                                        CommandParameter="{Binding PullRequestBrowser.SelectedChangedFilePath}"
-                                        IsEnabled="{Binding PullRequestBrowser.CanOpenDiffDocument}" />
+                                        Content="Abrir diff en Visual Studio"
+                                        Command="{Binding PullRequestBrowser.Files.OpenDiffDocumentCommand}"
+                                        CommandParameter="{Binding PullRequestBrowser.Files.SelectedPath}"
+                                        IsEnabled="{Binding PullRequestBrowser.Files.CanOpenDiffDocument}" />
                             </Grid>
                             <TextBlock Grid.Row="1"
                                        Margin="12,6,12,10"
                                        Style="{DynamicResource Layout.StatusText}"
-                                       Text="{Binding PullRequestBrowser.DiffStatus}" />
+                                       Text="{Binding PullRequestBrowser.Files.DiffStatus}" />
                             <Border Grid.Row="2"
                                     Margin="12,0,12,12"
                                     BorderThickness="1"
                                     BorderBrush="{DynamicResource {x:Static styles:VsBrushes.ControlOutlineKey}}"
                                     Background="{DynamicResource {x:Static styles:VsBrushes.ToolWindowBackgroundKey}}">
-                                <ScrollViewer Padding="12"
-                                              HorizontalScrollBarVisibility="Auto"
-                                              VerticalScrollBarVisibility="Auto">
-                                    <TextBlock FontFamily="Consolas"
-                                               FontSize="12"
-                                               TextWrapping="NoWrap"
-                                               Text="{Binding PullRequestBrowser.SelectedFileDiff}" />
-                                </ScrollViewer>
+                                <ListBox Padding="0"
+                                         BorderThickness="0"
+                                         Background="{DynamicResource {x:Static styles:VsBrushes.ToolWindowBackgroundKey}}"
+                                         HorizontalContentAlignment="Stretch"
+                                         ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                         ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                         VirtualizingPanel.IsVirtualizing="True"
+                                         VirtualizingPanel.VirtualizationMode="Recycling"
+                                         ItemsSource="{Binding PullRequestBrowser.Files.DiffRows}">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid>
+                                                    <Border Padding="0,2"
+                                                            BorderThickness="0,0,0,1"
+                                                            BorderBrush="{DynamicResource {x:Static styles:VsBrushes.ControlOutlineKey}}">
+                                                        <Border.Style>
+                                                            <Style TargetType="Border">
+                                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                                <Setter Property="Background" Value="Transparent" />
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding RowType}" Value="Code">
+                                                                        <Setter Property="Visibility" Value="Visible" />
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding ChangeType}" Value="Added">
+                                                                        <Setter Property="Background" Value="#2633A852" />
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding ChangeType}" Value="Removed">
+                                                                        <Setter Property="Background" Value="#26D73A49" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Border.Style>
+                                                        <Grid>
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="52" />
+                                                                <ColumnDefinition Width="52" />
+                                                                <ColumnDefinition Width="24" />
+                                                                <ColumnDefinition Width="Auto" />
+                                                            </Grid.ColumnDefinitions>
+
+                                                            <TextBlock Padding="8,1"
+                                                                       HorizontalAlignment="Right"
+                                                                       FontFamily="Consolas"
+                                                                       FontSize="11"
+                                                                       Opacity="0.55"
+                                                                       Text="{Binding BeforeLineText}" />
+                                                            <TextBlock Grid.Column="1"
+                                                                       Padding="8,1"
+                                                                       HorizontalAlignment="Right"
+                                                                       FontFamily="Consolas"
+                                                                       FontSize="11"
+                                                                       Opacity="0.55"
+                                                                       Text="{Binding AfterLineText}" />
+                                                            <TextBlock Grid.Column="2"
+                                                                       Padding="6,1,0,1"
+                                                                       FontFamily="Consolas"
+                                                                       FontSize="12"
+                                                                       FontWeight="SemiBold"
+                                                                       Text="{Binding Marker}" />
+                                                            <ItemsControl Grid.Column="3"
+                                                                          Margin="4,1,16,1"
+                                                                          ItemsSource="{Binding Tokens}">
+                                                                <ItemsControl.ItemsPanel>
+                                                                    <ItemsPanelTemplate>
+                                                                        <StackPanel Orientation="Horizontal" />
+                                                                    </ItemsPanelTemplate>
+                                                                </ItemsControl.ItemsPanel>
+                                                                <ItemsControl.ItemTemplate>
+                                                                    <DataTemplate>
+                                                                        <TextBlock FontFamily="Consolas"
+                                                                                   FontSize="12"
+                                                                                   TextWrapping="NoWrap"
+                                                                                   Text="{Binding Text}">
+                                                                            <TextBlock.Style>
+                                                                                <Style TargetType="TextBlock">
+                                                                                    <Setter Property="Foreground"
+                                                                                            Value="{DynamicResource {x:Static styles:VsBrushes.WindowTextKey}}" />
+                                                                                    <Style.Triggers>
+                                                                                        <DataTrigger Binding="{Binding Classification}" Value="Keyword">
+                                                                                            <Setter Property="Foreground"
+                                                                                                    Value="{DynamicResource {x:Static styles:VsBrushes.WindowTextKey}}" />
+                                                                                            <Setter Property="FontWeight" Value="SemiBold" />
+                                                                                        </DataTrigger>
+                                                                                        <DataTrigger Binding="{Binding Classification}" Value="String">
+                                                                                            <Setter Property="Foreground"
+                                                                                                    Value="{DynamicResource {x:Static colors:EnvironmentColors.ToolWindowValidationErrorTextBrushKey}}" />
+                                                                                        </DataTrigger>
+                                                                                        <DataTrigger Binding="{Binding Classification}" Value="Number">
+                                                                                            <Setter Property="Foreground"
+                                                                                                    Value="{DynamicResource {x:Static styles:VsBrushes.WindowTextKey}}" />
+                                                                                        </DataTrigger>
+                                                                                        <DataTrigger Binding="{Binding Classification}" Value="Comment">
+                                                                                            <Setter Property="Foreground"
+                                                                                                    Value="{DynamicResource {x:Static colors:EnvironmentColors.ClassDesignerCommentTextBrushKey}}" />
+                                                                                        </DataTrigger>
+                                                                                        <DataTrigger Binding="{Binding Classification}" Value="Preprocessor">
+                                                                                            <Setter Property="Foreground"
+                                                                                                    Value="{DynamicResource {x:Static colors:EnvironmentColors.SystemGrayTextBrushKey}}" />
+                                                                                        </DataTrigger>
+                                                                                        <DataTrigger Binding="{Binding Classification}" Value="Type">
+                                                                                            <Setter Property="Foreground"
+                                                                                                    Value="{DynamicResource {x:Static colors:EnvironmentColors.ControlLinkTextBrushKey}}" />
+                                                                                        </DataTrigger>
+                                                                                    </Style.Triggers>
+                                                                                </Style>
+                                                                            </TextBlock.Style>
+                                                                        </TextBlock>
+                                                                    </DataTemplate>
+                                                                </ItemsControl.ItemTemplate>
+                                                            </ItemsControl>
+                                                        </Grid>
+                                                    </Border>
+
+                                                    <Border Padding="12,6"
+                                                            Background="#1F4C8ED9"
+                                                            BorderThickness="0,1,0,1"
+                                                            BorderBrush="{DynamicResource {x:Static styles:VsBrushes.ControlOutlineKey}}">
+                                                        <Border.Style>
+                                                            <Style TargetType="Border">
+                                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding RowType}" Value="Hunk">
+                                                                        <Setter Property="Visibility" Value="Visible" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Border.Style>
+                                                        <TextBlock FontFamily="Consolas"
+                                                                   FontSize="12"
+                                                                   FontWeight="SemiBold"
+                                                                   Text="{Binding Content}" />
+                                                    </Border>
+
+                                                    <Border Padding="12,5">
+                                                        <Border.Style>
+                                                            <Style TargetType="Border">
+                                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding RowType}" Value="Meta">
+                                                                        <Setter Property="Visibility" Value="Visible" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Border.Style>
+                                                        <TextBlock FontFamily="Consolas"
+                                                                   FontSize="11"
+                                                                   FontStyle="Italic"
+                                                                   Opacity="0.7"
+                                                                   Text="{Binding Content}" />
+                                                    </Border>
+
+                                                    <Border Margin="86,7,16,9"
+                                                            Padding="12"
+                                                            BorderThickness="1,1,1,1"
+                                                            BorderBrush="{DynamicResource {x:Static colors:EnvironmentColors.AccentMediumBrushKey}}"
+                                                            Background="{DynamicResource {x:Static styles:VsBrushes.ToolWindowBackgroundKey}}"
+                                                            CornerRadius="4">
+                                                        <Border.Style>
+                                                            <Style TargetType="Border">
+                                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding RowType}" Value="Comment">
+                                                                        <Setter Property="Visibility" Value="Visible" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Border.Style>
+                                                        <StackPanel>
+                                                            <Grid>
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="28" />
+                                                                    <ColumnDefinition Width="*" />
+                                                                    <ColumnDefinition Width="Auto" />
+                                                                </Grid.ColumnDefinitions>
+
+                                                                <Border Width="24"
+                                                                        Height="24"
+                                                                        BorderThickness="1"
+                                                                        BorderBrush="{DynamicResource {x:Static colors:EnvironmentColors.AccentMediumBrushKey}}"
+                                                                        Background="{DynamicResource {x:Static colors:EnvironmentColors.AccentPaleBrushKey}}"
+                                                                        CornerRadius="12">
+                                                                    <TextBlock HorizontalAlignment="Center"
+                                                                               VerticalAlignment="Center"
+                                                                               FontSize="10"
+                                                                               FontWeight="SemiBold"
+                                                                               Text="{Binding AuthorInitials}" />
+                                                                </Border>
+
+                                                                <StackPanel Grid.Column="1" Margin="7,0,12,0">
+                                                                    <TextBlock FontWeight="SemiBold"
+                                                                               Text="{Binding Author}" />
+                                                                    <TextBlock Margin="0,2,0,0"
+                                                                               FontSize="11"
+                                                                               Opacity="0.65"
+                                                                               Text="{Binding CreatedOn}" />
+                                                                </StackPanel>
+
+                                                                <StackPanel Grid.Column="2">
+                                                                    <TextBlock HorizontalAlignment="Right"
+                                                                               FontSize="11"
+                                                                               FontWeight="SemiBold"
+                                                                               Foreground="{DynamicResource {x:Static colors:EnvironmentColors.AccentMediumBrushKey}}"
+                                                                               Text="{Binding State}" />
+                                                                    <TextBlock Margin="0,2,0,0"
+                                                                               HorizontalAlignment="Right"
+                                                                               FontSize="11"
+                                                                               Opacity="0.7"
+                                                                               Text="{Binding Location}" />
+                                                                </StackPanel>
+                                                            </Grid>
+
+                                                            <TextBlock Margin="35,10,0,0"
+                                                                       FontSize="13"
+                                                                       TextWrapping="Wrap"
+                                                                       Text="{Binding Content}" />
+                                                        </StackPanel>
+                                                    </Border>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                </ListBox>
                             </Border>
                         </Grid>
 
@@ -292,55 +504,220 @@
                                     <StackPanel Margin="14">
                                         <TextBlock FontSize="15"
                                                    FontWeight="SemiBold"
-                                                   Text="{Binding PullRequestBrowser.DetailTitle}" />
+                                                   Text="{Binding PullRequestBrowser.Detail.Title}" />
                                         <TextBlock Margin="0,7,0,0"
-                                                   Text="{Binding PullRequestBrowser.DetailBranches}" />
+                                                   Text="{Binding PullRequestBrowser.Detail.Branches}" />
                                         <TextBlock Margin="0,5,0,0"
                                                    Opacity="0.75"
-                                                   Text="{Binding PullRequestBrowser.DetailState}" />
+                                                   Text="{Binding PullRequestBrowser.Detail.State}" />
 
                                         <TextBlock Margin="0,18,0,0"
                                                    FontWeight="SemiBold"
                                                    Text="Descripción" />
                                         <TextBlock Margin="0,7,0,0"
-                                                   Text="{Binding PullRequestBrowser.DetailDescription}" />
+                                                   Text="{Binding PullRequestBrowser.Detail.Description}" />
 
                                         <TextBlock Margin="0,18,0,0" FontWeight="SemiBold" Text="Autor" />
-                                        <TextBlock Margin="0,4,0,0" Text="{Binding PullRequestBrowser.DetailAuthor}" />
+                                        <TextBlock Margin="0,4,0,0" Text="{Binding PullRequestBrowser.Detail.Author}" />
 
                                         <TextBlock Margin="0,12,0,0" FontWeight="SemiBold" Text="Fechas" />
-                                        <TextBlock Margin="0,4,0,0" Text="{Binding PullRequestBrowser.DetailCreatedOn}" />
-                                        <TextBlock Margin="0,4,0,0" Text="{Binding PullRequestBrowser.DetailUpdatedOn}" />
+                                        <TextBlock Margin="0,4,0,0" Text="{Binding PullRequestBrowser.Detail.CreatedOn}" />
+                                        <TextBlock Margin="0,4,0,0" Text="{Binding PullRequestBrowser.Detail.UpdatedOn}" />
 
                                         <TextBlock Margin="0,12,0,0" FontWeight="SemiBold" Text="Reviewers" />
-                                        <TextBlock Margin="0,4,0,0" Text="{Binding PullRequestBrowser.DetailReviewers}" />
+                                        <TextBlock Margin="0,4,0,0" Text="{Binding PullRequestBrowser.Detail.Reviewers}" />
 
                                         <TextBlock Margin="0,12,0,0" FontWeight="SemiBold" Text="Commits" />
-                                        <TextBlock Margin="0,4,0,0" Text="{Binding PullRequestBrowser.DetailCommits}" />
-                                        <TextBlock Margin="0,4,0,0" Text="{Binding PullRequestBrowser.DetailOptions}" />
+                                        <TextBlock Margin="0,4,0,0" Text="{Binding PullRequestBrowser.Detail.Commits}" />
+                                        <TextBlock Margin="0,4,0,0" Text="{Binding PullRequestBrowser.Detail.Options}" />
 
                                         <TextBlock Margin="0,12,0,0" FontWeight="SemiBold" Text="Bitbucket" />
-                                        <TextBlock Margin="0,4,0,0" Text="{Binding PullRequestBrowser.DetailUrl}" />
+                                        <TextBlock Margin="0,4,0,0" Text="{Binding PullRequestBrowser.Detail.Url}" />
                                     </StackPanel>
                                 </ScrollViewer>
                             </TabItem>
 
-                            <TabItem Header="Discusiones">
-                                <TextBlock Margin="16"
-                                           Style="{DynamicResource Layout.BodyText}"
-                                           Text="{Binding PullRequestBrowser.DetailDiscussionSummary}" />
+                            <TabItem Header="{Binding PullRequestBrowser.Comments.TabTitle}">
+                                <Grid Margin="12">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="*" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+
+                                    <TextBlock Style="{DynamicResource Layout.StatusText}"
+                                               TextWrapping="Wrap"
+                                               Text="{Binding PullRequestBrowser.Comments.Status}" />
+
+                                    <TextBlock Grid.Row="1"
+                                               Margin="0,12,0,6"
+                                               FontWeight="SemiBold"
+                                               Text="Sin resolver" />
+
+                                    <ListBox Grid.Row="2"
+                                             Padding="0"
+                                             Background="{DynamicResource {x:Static styles:VsBrushes.ToolWindowBackgroundKey}}"
+                                             BorderThickness="0"
+                                             Foreground="{DynamicResource {x:Static styles:VsBrushes.WindowTextKey}}"
+                                             HorizontalContentAlignment="Stretch"
+                                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                             ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                             ItemsSource="{Binding PullRequestBrowser.Comments.Unresolved}">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border Margin="0,0,0,10"
+                                                        Padding="12"
+                                                        BorderThickness="1"
+                                                        BorderBrush="{DynamicResource {x:Static styles:VsBrushes.ControlOutlineKey}}"
+                                                        Background="{DynamicResource {x:Static styles:VsBrushes.ToolWindowBackgroundKey}}"
+                                                        CornerRadius="4">
+                                                    <StackPanel>
+                                                        <TextBlock FontSize="12"
+                                                                   FontWeight="SemiBold"
+                                                                   Opacity="0.82"
+                                                                   TextWrapping="Wrap"
+                                                                   Text="{Binding Location}" />
+
+                                                        <Grid Margin="0,9,0,0">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="28" />
+                                                                <ColumnDefinition Width="*" />
+                                                            </Grid.ColumnDefinitions>
+
+                                                            <Border Width="24"
+                                                                    Height="24"
+                                                                    BorderThickness="1"
+                                                                    BorderBrush="{DynamicResource {x:Static styles:VsBrushes.ControlOutlineKey}}"
+                                                                    Background="{DynamicResource {x:Static styles:VsBrushes.ControlOutlineKey}}"
+                                                                    CornerRadius="12">
+                                                                <TextBlock HorizontalAlignment="Center"
+                                                                           VerticalAlignment="Center"
+                                                                           FontSize="10"
+                                                                           FontWeight="SemiBold"
+                                                                           Text="{Binding AuthorInitials}" />
+                                                            </Border>
+
+                                                            <StackPanel Grid.Column="1"
+                                                                        Margin="7,0,0,0">
+                                                                <TextBlock FontWeight="SemiBold"
+                                                                           TextWrapping="Wrap"
+                                                                           Text="{Binding Author}" />
+                                                                <TextBlock Margin="0,2,0,0"
+                                                                           FontSize="11"
+                                                                           Opacity="0.65"
+                                                                           Text="{Binding CreatedOn}" />
+                                                            </StackPanel>
+                                                        </Grid>
+
+                                                        <TextBlock Margin="35,10,0,0"
+                                                                   FontSize="13"
+                                                                   TextWrapping="Wrap"
+                                                                   Text="{Binding Content}" />
+
+                                                        <WrapPanel Margin="35,10,0,0">
+                                                            <TextBlock FontWeight="SemiBold"
+                                                                       Text="{Binding State}" />
+                                                            <TextBlock Margin="12,0,0,0"
+                                                                       Opacity="0.65"
+                                                                       Text="{Binding Thread}" />
+                                                        </WrapPanel>
+                                                    </StackPanel>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+
+                                    <Expander Grid.Row="3"
+                                              Margin="0,10,0,0"
+                                              Header="{Binding PullRequestBrowser.Comments.AllHeader}"
+                                              IsExpanded="False">
+                                        <ListBox MaxHeight="320"
+                                                 Padding="0"
+                                                 Background="{DynamicResource {x:Static styles:VsBrushes.ToolWindowBackgroundKey}}"
+                                                 BorderThickness="0"
+                                                 Foreground="{DynamicResource {x:Static styles:VsBrushes.WindowTextKey}}"
+                                                 HorizontalContentAlignment="Stretch"
+                                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                                 ItemsSource="{Binding PullRequestBrowser.Comments.All}">
+                                            <ListBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border Margin="0,0,0,10"
+                                                            Padding="12"
+                                                            BorderThickness="1"
+                                                            BorderBrush="{DynamicResource {x:Static styles:VsBrushes.ControlOutlineKey}}"
+                                                            Background="{DynamicResource {x:Static styles:VsBrushes.ToolWindowBackgroundKey}}"
+                                                            CornerRadius="4">
+                                                        <StackPanel>
+                                                            <TextBlock FontSize="12"
+                                                                       FontWeight="SemiBold"
+                                                                       Opacity="0.82"
+                                                                       TextWrapping="Wrap"
+                                                                       Text="{Binding Location}" />
+
+                                                            <Grid Margin="0,9,0,0">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="28" />
+                                                                    <ColumnDefinition Width="*" />
+                                                                </Grid.ColumnDefinitions>
+
+                                                                <Border Width="24"
+                                                                        Height="24"
+                                                                        BorderThickness="1"
+                                                                        BorderBrush="{DynamicResource {x:Static styles:VsBrushes.ControlOutlineKey}}"
+                                                                        Background="{DynamicResource {x:Static styles:VsBrushes.ControlOutlineKey}}"
+                                                                        CornerRadius="12">
+                                                                    <TextBlock HorizontalAlignment="Center"
+                                                                               VerticalAlignment="Center"
+                                                                               FontSize="10"
+                                                                               FontWeight="SemiBold"
+                                                                               Text="{Binding AuthorInitials}" />
+                                                                </Border>
+
+                                                                <StackPanel Grid.Column="1"
+                                                                            Margin="7,0,0,0">
+                                                                    <TextBlock FontWeight="SemiBold"
+                                                                               TextWrapping="Wrap"
+                                                                               Text="{Binding Author}" />
+                                                                    <TextBlock Margin="0,2,0,0"
+                                                                               FontSize="11"
+                                                                               Opacity="0.65"
+                                                                               Text="{Binding CreatedOn}" />
+                                                                </StackPanel>
+                                                            </Grid>
+
+                                                            <TextBlock Margin="35,10,0,0"
+                                                                       FontSize="13"
+                                                                       TextWrapping="Wrap"
+                                                                       Text="{Binding Content}" />
+
+                                                            <WrapPanel Margin="35,10,0,0">
+                                                                <TextBlock FontWeight="SemiBold"
+                                                                           Text="{Binding State}" />
+                                                                <TextBlock Margin="12,0,0,0"
+                                                                           Opacity="0.65"
+                                                                           Text="{Binding Thread}" />
+                                                            </WrapPanel>
+                                                        </StackPanel>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ListBox.ItemTemplate>
+                                        </ListBox>
+                                    </Expander>
+                                </Grid>
                             </TabItem>
 
                             <TabItem Header="Tareas">
                                 <TextBlock Margin="16"
                                            Style="{DynamicResource Layout.BodyText}"
-                                           Text="{Binding PullRequestBrowser.DetailTaskSummary}" />
+                                           Text="{Binding PullRequestBrowser.Detail.TaskSummary}" />
                             </TabItem>
 
                             <TabItem Header="Actividad">
                                 <TextBlock Margin="16"
                                            Style="{DynamicResource Layout.BodyText}"
-                                           Text="{Binding PullRequestBrowser.DetailActivitySummary}" />
+                                           Text="{Binding PullRequestBrowser.Detail.ActivitySummary}" />
                             </TabItem>
                         </TabControl>
                     </Grid>
