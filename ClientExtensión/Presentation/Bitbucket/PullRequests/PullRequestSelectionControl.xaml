@@ -2,63 +2,350 @@
               xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
               xmlns:styles="clr-namespace:Microsoft.VisualStudio.Shell;assembly=Microsoft.VisualStudio.Shell.15.0"
               xmlns:vs="http://schemas.microsoft.com/visualstudio/extensibility/2022/xaml">
-    <ScrollViewer Background="{DynamicResource {x:Static styles:VsBrushes.ToolWindowBackgroundKey}}"
-                  VerticalScrollBarVisibility="Auto">
-        <Grid Style="{DynamicResource Layout.PageContainer}">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="24" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-            </Grid.RowDefinitions>
+    <Grid Background="{DynamicResource {x:Static styles:VsBrushes.ToolWindowBackgroundKey}}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
 
-            <TextBlock Style="{DynamicResource Layout.PageTitle}"
-                       Text="{Binding Title}" />
+        <Border Padding="14,12"
+                BorderThickness="0,0,0,1"
+                BorderBrush="{DynamicResource {x:Static styles:VsBrushes.ControlOutlineKey}}">
+            <StackPanel>
+                <TextBlock Style="{DynamicResource Layout.PageTitle}"
+                           Text="{Binding Title}" />
+                <TextBlock Style="{DynamicResource Layout.PageSubtitle}"
+                           Text="{Binding Subtitle}" />
+            </StackPanel>
+        </Border>
 
-            <TextBlock Grid.Row="1"
-                       Style="{DynamicResource Layout.PageSubtitle}"
-                       Text="{Binding Subtitle}" />
+        <Border Grid.Row="1"
+                Padding="12,10"
+                BorderThickness="0,0,0,1"
+                BorderBrush="{DynamicResource {x:Static styles:VsBrushes.ControlOutlineKey}}">
+            <StackPanel>
+                <WrapPanel VerticalAlignment="Center">
+                    <StackPanel Margin="0,0,14,0">
+                        <TextBlock Margin="0,0,0,4"
+                                   Text="Workspace" />
+                        <ComboBox MinWidth="190"
+                                  ItemsSource="{Binding Workspaces}"
+                                  DisplayMemberPath="Slug"
+                                  SelectedValuePath="Slug"
+                                  SelectedValue="{Binding SelectedWorkspaceSlug, Mode=TwoWay}"
+                                  IsEnabled="{Binding IsWorkspaceSelectorEnabled}" />
+                    </StackPanel>
 
-            <Border Grid.Row="3"
-                    Style="{DynamicResource Layout.SectionCard}">
+                    <StackPanel>
+                        <TextBlock Margin="0,0,0,4"
+                                   Text="Repositorio" />
+                        <ComboBox MinWidth="240"
+                                  ItemsSource="{Binding Repositories}"
+                                  DisplayMemberPath="DisplayName"
+                                  SelectedValuePath="Slug"
+                                  SelectedValue="{Binding SelectedRepositorySlug, Mode=TwoWay}"
+                                  IsEnabled="{Binding IsRepositorySelectorEnabled}" />
+                    </StackPanel>
+                </WrapPanel>
+
+                <WrapPanel Margin="0,8,0,0">
+                    <TextBlock Margin="0,0,18,0"
+                               Style="{DynamicResource Layout.StatusText}"
+                               Text="{Binding WorkspaceStatus}" />
+                    <TextBlock Style="{DynamicResource Layout.StatusText}"
+                               Text="{Binding RepositoryStatus}" />
+                </WrapPanel>
+            </StackPanel>
+        </Border>
+
+        <TabControl Grid.Row="2"
+                    Background="{DynamicResource {x:Static styles:VsBrushes.ToolWindowBackgroundKey}}"
+                    Foreground="{DynamicResource {x:Static styles:VsBrushes.WindowTextKey}}"
+                    SelectedIndex="{Binding PullRequestBrowser.SelectedTabIndex, Mode=TwoWay}">
+            <TabItem Header="{Binding PullRequestBrowser.ListTabTitle}">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
 
-                    <TextBlock Style="{DynamicResource Layout.SectionTitle}"
-                               Text="{Binding WorkspaceSectionTitle}" />
+                    <Border Padding="12,8"
+                            BorderThickness="0,0,0,1"
+                            BorderBrush="{DynamicResource {x:Static styles:VsBrushes.ControlOutlineKey}}">
+                        <TextBlock Style="{DynamicResource Layout.StatusText}"
+                                   Text="{Binding PullRequestBrowser.ListStatus}" />
+                    </Border>
 
-                    <TextBlock Grid.Row="1"
-                               Margin="0,6,0,0"
-                               Style="{DynamicResource Layout.BodyText}"
-                               Text="{Binding WorkspaceDescription}" />
+                    <ListBox Grid.Row="1"
+                             Padding="0"
+                             Background="{DynamicResource {x:Static styles:VsBrushes.ToolWindowBackgroundKey}}"
+                             BorderThickness="0"
+                             Foreground="{DynamicResource {x:Static styles:VsBrushes.WindowTextKey}}"
+                             HorizontalContentAlignment="Stretch"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto"
+                             ItemsSource="{Binding PullRequestBrowser.PullRequests}"
+                             SelectedValuePath="Id"
+                             SelectedValue="{Binding PullRequestBrowser.SelectedPullRequestId, Mode=TwoWay}"
+                             IsEnabled="{Binding PullRequestBrowser.IsPullRequestSelectorEnabled}">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Border Padding="12,9"
+                                        BorderThickness="0,0,0,1"
+                                        BorderBrush="{DynamicResource {x:Static styles:VsBrushes.ControlOutlineKey}}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
 
-                    <ComboBox Grid.Row="2"
-                              Margin="0,14,0,0"
-                              MinWidth="240"
-                              HorizontalAlignment="Stretch"
-                              ItemsSource="{Binding Workspaces}"
-                              DisplayMemberPath="Slug"
-                              SelectedValuePath="Slug"
-                              SelectedValue="{Binding SelectedWorkspaceSlug, Mode=TwoWay}"
-                              IsEnabled="{Binding IsWorkspaceSelectorEnabled}" />
+                                        <TextBlock FontWeight="SemiBold"
+                                                   Text="{Binding DisplayTitle}" />
+                                        <TextBlock Grid.Column="1"
+                                                   Margin="16,0,0,0"
+                                                   Opacity="0.8"
+                                                   Text="{Binding State}" />
 
-                    <TextBlock Grid.Row="3"
-                               Margin="0,12,0,0"
-                               Style="{DynamicResource Layout.StatusText}"
-                               Text="{Binding Status}" />
+                                        <TextBlock Grid.Row="1"
+                                                   Margin="0,4,0,0"
+                                                   Opacity="0.72"
+                                                   Text="{Binding Metadata}" />
+                                        <TextBlock Grid.Row="1"
+                                                   Grid.Column="1"
+                                                   Margin="16,4,0,0"
+                                                   Opacity="0.72"
+                                                   Text="{Binding Activity}" />
+
+                                        <TextBlock Grid.Row="2"
+                                                   Grid.ColumnSpan="2"
+                                                   Margin="0,5,0,0"
+                                                   Text="{Binding BranchRoute}" />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
                 </Grid>
-            </Border>
+            </TabItem>
 
-            <TextBlock Grid.Row="4"
-                       Margin="0,16,0,0"
-                       Style="{DynamicResource Layout.HelperText}"
-                       Text="{Binding NextStep}" />
-        </Grid>
-    </ScrollViewer>
+            <TabItem Header="{Binding PullRequestBrowser.DetailTabTitle}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <Border Padding="12,8"
+                            BorderThickness="0,0,0,1"
+                            BorderBrush="{DynamicResource {x:Static styles:VsBrushes.ControlOutlineKey}}">
+                        <TextBlock Style="{DynamicResource Layout.StatusText}"
+                                   Text="{Binding PullRequestBrowser.DetailStatus}" />
+                    </Border>
+
+                    <Grid Grid.Row="1">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="1*" MinWidth="220" />
+                            <ColumnDefinition Width="5" />
+                            <ColumnDefinition Width="2.2*" MinWidth="320" />
+                            <ColumnDefinition Width="5" />
+                            <ColumnDefinition Width="1.3*" MinWidth="280" />
+                        </Grid.ColumnDefinitions>
+
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+
+                            <TextBlock Margin="12,10,12,0"
+                                       Style="{DynamicResource Layout.SectionTitle}"
+                                       Text="Archivos modificados" />
+                            <TextBlock Grid.Row="1"
+                                       Margin="12,6,12,10"
+                                       Style="{DynamicResource Layout.StatusText}"
+                                       Text="{Binding PullRequestBrowser.FilesStatus}" />
+
+                            <ListBox Grid.Row="2"
+                                     Padding="0"
+                                     Background="{DynamicResource {x:Static styles:VsBrushes.ToolWindowBackgroundKey}}"
+                                     BorderThickness="0"
+                                     Foreground="{DynamicResource {x:Static styles:VsBrushes.WindowTextKey}}"
+                                     HorizontalContentAlignment="Stretch"
+                                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                     ItemsSource="{Binding PullRequestBrowser.ChangedFiles}"
+                                     SelectedValuePath="Path"
+                                     SelectedValue="{Binding PullRequestBrowser.SelectedChangedFilePath, Mode=TwoWay}"
+                                     IsEnabled="{Binding PullRequestBrowser.IsChangedFileSelectorEnabled}">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Padding="10,8"
+                                                BorderThickness="0,0,0,1"
+                                                BorderBrush="{DynamicResource {x:Static styles:VsBrushes.ControlOutlineKey}}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto" />
+                                                    <RowDefinition Height="Auto" />
+                                                    <RowDefinition Height="Auto" />
+                                                </Grid.RowDefinitions>
+
+                                                <TextBlock FontWeight="SemiBold"
+                                                           Text="{Binding FileName}" />
+                                                <TextBlock Grid.Column="1"
+                                                           Margin="10,0,0,0"
+                                                           Text="{Binding LineSummary}" />
+                                                <TextBlock Grid.Row="1"
+                                                           Grid.ColumnSpan="2"
+                                                           Margin="0,3,0,0"
+                                                           Opacity="0.7"
+                                                           Text="{Binding Directory}" />
+                                                <TextBlock Grid.Row="2"
+                                                           Margin="0,3,0,0"
+                                                           Opacity="0.75"
+                                                           Text="{Binding Change}" />
+                                                <TextBlock Grid.Row="2"
+                                                           Grid.Column="1"
+                                                           Margin="10,3,0,0"
+                                                           Opacity="0.7"
+                                                           Text="{Binding PreviousPath}" />
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Grid>
+
+                        <GridSplitter Grid.Column="1"
+                                      Width="5"
+                                      HorizontalAlignment="Stretch"
+                                      Background="{DynamicResource {x:Static styles:VsBrushes.ControlOutlineKey}}" />
+
+                        <Grid Grid.Column="2">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+
+                            <Grid Margin="12,8,12,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock FontWeight="SemiBold"
+                                               Text="{Binding PullRequestBrowser.SelectedFileTitle}" />
+                                    <TextBlock Margin="0,3,0,0"
+                                               Style="{DynamicResource Layout.HelperText}"
+                                               Text="Vista previa del diff unificado" />
+                                </StackPanel>
+
+                                <Button Grid.Column="1"
+                                        Margin="12,0,0,0"
+                                        Padding="12,5"
+                                        VerticalAlignment="Center"
+                                        Content="Comparar en el editor"
+                                        Command="{Binding PullRequestBrowser.OpenDiffDocumentCommand}"
+                                        CommandParameter="{Binding PullRequestBrowser.SelectedChangedFilePath}"
+                                        IsEnabled="{Binding PullRequestBrowser.CanOpenDiffDocument}" />
+                            </Grid>
+                            <TextBlock Grid.Row="1"
+                                       Margin="12,6,12,10"
+                                       Style="{DynamicResource Layout.StatusText}"
+                                       Text="{Binding PullRequestBrowser.DiffStatus}" />
+                            <Border Grid.Row="2"
+                                    Margin="12,0,12,12"
+                                    BorderThickness="1"
+                                    BorderBrush="{DynamicResource {x:Static styles:VsBrushes.ControlOutlineKey}}"
+                                    Background="{DynamicResource {x:Static styles:VsBrushes.ToolWindowBackgroundKey}}">
+                                <ScrollViewer Padding="12"
+                                              HorizontalScrollBarVisibility="Auto"
+                                              VerticalScrollBarVisibility="Auto">
+                                    <TextBlock FontFamily="Consolas"
+                                               FontSize="12"
+                                               TextWrapping="NoWrap"
+                                               Text="{Binding PullRequestBrowser.SelectedFileDiff}" />
+                                </ScrollViewer>
+                            </Border>
+                        </Grid>
+
+                        <GridSplitter Grid.Column="3"
+                                      Width="5"
+                                      HorizontalAlignment="Stretch"
+                                      Background="{DynamicResource {x:Static styles:VsBrushes.ControlOutlineKey}}" />
+
+                        <TabControl Grid.Column="4"
+                                    Background="{DynamicResource {x:Static styles:VsBrushes.ToolWindowBackgroundKey}}"
+                                    Foreground="{DynamicResource {x:Static styles:VsBrushes.WindowTextKey}}">
+                            <TabItem Header="Info">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                    <StackPanel Margin="14">
+                                        <TextBlock FontSize="15"
+                                                   FontWeight="SemiBold"
+                                                   Text="{Binding PullRequestBrowser.DetailTitle}" />
+                                        <TextBlock Margin="0,7,0,0"
+                                                   Text="{Binding PullRequestBrowser.DetailBranches}" />
+                                        <TextBlock Margin="0,5,0,0"
+                                                   Opacity="0.75"
+                                                   Text="{Binding PullRequestBrowser.DetailState}" />
+
+                                        <TextBlock Margin="0,18,0,0"
+                                                   FontWeight="SemiBold"
+                                                   Text="Descripción" />
+                                        <TextBlock Margin="0,7,0,0"
+                                                   Text="{Binding PullRequestBrowser.DetailDescription}" />
+
+                                        <TextBlock Margin="0,18,0,0" FontWeight="SemiBold" Text="Autor" />
+                                        <TextBlock Margin="0,4,0,0" Text="{Binding PullRequestBrowser.DetailAuthor}" />
+
+                                        <TextBlock Margin="0,12,0,0" FontWeight="SemiBold" Text="Fechas" />
+                                        <TextBlock Margin="0,4,0,0" Text="{Binding PullRequestBrowser.DetailCreatedOn}" />
+                                        <TextBlock Margin="0,4,0,0" Text="{Binding PullRequestBrowser.DetailUpdatedOn}" />
+
+                                        <TextBlock Margin="0,12,0,0" FontWeight="SemiBold" Text="Reviewers" />
+                                        <TextBlock Margin="0,4,0,0" Text="{Binding PullRequestBrowser.DetailReviewers}" />
+
+                                        <TextBlock Margin="0,12,0,0" FontWeight="SemiBold" Text="Commits" />
+                                        <TextBlock Margin="0,4,0,0" Text="{Binding PullRequestBrowser.DetailCommits}" />
+                                        <TextBlock Margin="0,4,0,0" Text="{Binding PullRequestBrowser.DetailOptions}" />
+
+                                        <TextBlock Margin="0,12,0,0" FontWeight="SemiBold" Text="Bitbucket" />
+                                        <TextBlock Margin="0,4,0,0" Text="{Binding PullRequestBrowser.DetailUrl}" />
+                                    </StackPanel>
+                                </ScrollViewer>
+                            </TabItem>
+
+                            <TabItem Header="Discusiones">
+                                <TextBlock Margin="16"
+                                           Style="{DynamicResource Layout.BodyText}"
+                                           Text="{Binding PullRequestBrowser.DetailDiscussionSummary}" />
+                            </TabItem>
+
+                            <TabItem Header="Tareas">
+                                <TextBlock Margin="16"
+                                           Style="{DynamicResource Layout.BodyText}"
+                                           Text="{Binding PullRequestBrowser.DetailTaskSummary}" />
+                            </TabItem>
+
+                            <TabItem Header="Actividad">
+                                <TextBlock Margin="16"
+                                           Style="{DynamicResource Layout.BodyText}"
+                                           Text="{Binding PullRequestBrowser.DetailActivitySummary}" />
+                            </TabItem>
+                        </TabControl>
+                    </Grid>
+                </Grid>
+            </TabItem>
+        </TabControl>
+    </Grid>
 </DataTemplate>

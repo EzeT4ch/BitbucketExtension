@@ -17,6 +17,7 @@ internal sealed class DeleteBitbucketOAuthTokenCommand : Command
     private readonly IBitbucketOAuthConnectionService _connectionService;
     private readonly BitbucketAuthenticationCommandVisibility _commandVisibility;
     private readonly IBitbucketWorkspaceSelectionStore _workspaceSelectionStore;
+    private readonly IBitbucketRepositorySelectionStore _repositorySelectionStore;
     private readonly PullRequestSelectionData _pullRequestSelectionData;
 
     public DeleteBitbucketOAuthTokenCommand(
@@ -24,12 +25,14 @@ internal sealed class DeleteBitbucketOAuthTokenCommand : Command
         IBitbucketOAuthConnectionService connectionService,
         BitbucketAuthenticationCommandVisibility commandVisibility,
         IBitbucketWorkspaceSelectionStore workspaceSelectionStore,
+        IBitbucketRepositorySelectionStore repositorySelectionStore,
         PullRequestSelectionData pullRequestSelectionData)
         : base(extensibility)
     {
         _connectionService = connectionService;
         _commandVisibility = commandVisibility;
         _workspaceSelectionStore = workspaceSelectionStore;
+        _repositorySelectionStore = repositorySelectionStore;
         _pullRequestSelectionData = pullRequestSelectionData;
         SetVisibilityState(false);
     }
@@ -64,6 +67,7 @@ internal sealed class DeleteBitbucketOAuthTokenCommand : Command
         {
             await _connectionService.DisconnectAsync(cancellationToken);
             await _workspaceSelectionStore.ClearAsync(cancellationToken);
+            await _repositorySelectionStore.ClearAsync(cancellationToken);
             _pullRequestSelectionData.ClearWorkspaces();
             await _commandVisibility.RefreshAsync(cancellationToken);
             OpenAppAuthorizationsPage();
