@@ -1,6 +1,8 @@
 using System.Diagnostics;
+using BitbucketAdapter.Application.Abstractions;
 using BitbucketAdapter.Application.Abstractions.OAuth;
 using ClientExtension.Presentation.Bitbucket.Authentication;
+using ClientExtension.Presentation.Bitbucket.PullRequests;
 using Microsoft.VisualStudio.Extensibility;
 using Microsoft.VisualStudio.Extensibility.Commands;
 using Microsoft.VisualStudio.Extensibility.Shell;
@@ -14,15 +16,24 @@ internal sealed class DeleteBitbucketOAuthTokenCommand : Command
 
     private readonly IBitbucketOAuthConnectionService _connectionService;
     private readonly BitbucketAuthenticationCommandVisibility _commandVisibility;
+    private readonly IBitbucketWorkspaceSelectionStore _workspaceSelectionStore;
+    private readonly IBitbucketRepositorySelectionStore _repositorySelectionStore;
+    private readonly PullRequestSelectionData _pullRequestSelectionData;
 
     public DeleteBitbucketOAuthTokenCommand(
         VisualStudioExtensibility extensibility,
         IBitbucketOAuthConnectionService connectionService,
-        BitbucketAuthenticationCommandVisibility commandVisibility)
+        BitbucketAuthenticationCommandVisibility commandVisibility,
+        IBitbucketWorkspaceSelectionStore workspaceSelectionStore,
+        IBitbucketRepositorySelectionStore repositorySelectionStore,
+        PullRequestSelectionData pullRequestSelectionData)
         : base(extensibility)
     {
         _connectionService = connectionService;
         _commandVisibility = commandVisibility;
+        _workspaceSelectionStore = workspaceSelectionStore;
+        _repositorySelectionStore = repositorySelectionStore;
+        _pullRequestSelectionData = pullRequestSelectionData;
         SetVisibilityState(false);
     }
 
@@ -55,6 +66,9 @@ internal sealed class DeleteBitbucketOAuthTokenCommand : Command
         try
         {
             await _connectionService.DisconnectAsync(cancellationToken);
+            await _workspaceSelectionStore.ClearAsync(cancellationToken);
+            await _repositorySelectionStore.ClearAsync(cancellationToken);
+            _pullRequestSelectionData.ClearWorkspaces();
             await _commandVisibility.RefreshAsync(cancellationToken);
             OpenAppAuthorizationsPage();
             await Extensibility.Shell().ShowPromptAsync(

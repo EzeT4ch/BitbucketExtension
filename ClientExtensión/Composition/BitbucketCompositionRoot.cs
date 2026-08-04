@@ -8,9 +8,15 @@ using BitbucketAdapter.Application.Auth.OAuth;
 using BitbucketAdapter.Infrastructure.Auth;
 using BitbucketAdapter.Infrastructure.Auth.AppPassword;
 using BitbucketAdapter.Infrastructure.Auth.OAuth;
+using BitbucketAdapter.Infrastructure.Repositories;
+using BitbucketAdapter.Infrastructure.PullRequests;
+using BitbucketAdapter.Infrastructure.Workspaces;
+using ClientExtension.Application.Abstractions;
 using ClientExtension.Composition.AppPassword;
+using ClientExtension.Composition.Documents;
 using ClientExtension.Composition.OAuth;
 using ClientExtension.Presentation.Bitbucket.Authentication;
+using ClientExtension.Presentation.Bitbucket.PullRequests;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.VisualStudio.Extensibility;
 using RequestAdapter.Application.Abstractions;
@@ -33,6 +39,15 @@ internal static class BitbucketCompositionRoot
             provider.GetRequiredService<IOAuthTokenStore>()));
         services.AddSingleton<BitbucketAuthenticationCommandVisibility>();
         services.AddSingleton<IBitbucketConnectionStatusService, BitbucketConnectionStatusService>();
+        services.AddSingleton<IBitbucketWorkspaceSelectionStore>(_ => new FileBitbucketWorkspaceSelectionStore());
+        services.AddSingleton<IBitbucketWorkspaceService, BitbucketWorkspaceService>();
+        services.AddSingleton<IBitbucketRepositorySelectionStore>(_ => new FileBitbucketRepositorySelectionStore());
+        services.AddSingleton<IBitbucketRepositoryService, BitbucketRepositoryService>();
+        services.AddSingleton<IBitbucketPullRequestService, BitbucketPullRequestService>();
+        services.AddSingleton<IBitbucketPullRequestChangesService, BitbucketPullRequestChangesService>();
+        services.AddSingleton<IPullRequestDiffDocumentService, VisualStudioPullRequestDiffDocumentService>();
+        services.AddSingleton<PullRequestBrowserData>();
+        services.AddSingleton<PullRequestSelectionData>();
         services.AddSingleton<IHttpRequestSender>(provider => BuildSender(
             provider.GetRequiredService<VisualStudioExtensibility>(),
             provider.GetRequiredService<IBitbucketAuthMethodStore>(),

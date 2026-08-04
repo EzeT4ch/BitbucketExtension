@@ -24,7 +24,8 @@
     </ItemGroup>
 
     <ItemGroup>
-      <EmbeddedResource Include="Presentation\IntegrationHub\IntegrationHubControl.xaml" />
+      <EmbeddedResource Include="Presentation\Bitbucket\PullRequests\PullRequestSelectionControl.xaml" />
+      <EmbeddedResource Include="Presentation\Shared\Layout\RemoteUiLayout.xaml" />
     </ItemGroup>
 
 </Project>

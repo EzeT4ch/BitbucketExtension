@@ -10,4 +10,8 @@ El flujo de dependencias es:
 
 Presentation -> Application contracts <- Infrastructure/Composition
 
-Cada nueva integración debe incorporar su pantalla y comandos bajo Presentation/<Provider>/, y exponer sus operaciones a la UI mediante contratos de Application. No debe realizar llamadas HTTP directas desde la extensión.
+Cada nueva integración debe incorporar sus pantallas y comandos bajo `Presentation/<Provider>/<Feature>/`, y exponer sus operaciones a la UI mediante contratos de Application. Las pantallas de Bitbucket y Jira son contribuciones independientes y no deben compartir modelos de estado específicos del proveedor.
+
+Los recursos visuales reutilizables de Remote UI viven bajo `Presentation/Shared/Layout/`. Pueden contener estilos, espaciado y recursos compatibles con el tema de Visual Studio, pero no estado ni reglas de una integración concreta. Remote UI no admite controles personalizados de la extensión dentro de XAML; por eso la reutilización visual se realiza mediante diccionarios de recursos embebidos.
+
+Presentation no debe realizar llamadas HTTP directas ni depender de implementaciones de Infrastructure.

@@ -6,7 +6,10 @@
     "Profile 1": {
       "commandName": "Executable",
       "executablePath": "C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\Common7\\IDE\\devenv.exe",
-      "commandLineArgs": "/rootsuffix Exp /log"
+      "commandLineArgs": "/rootsuffix Exp /log",
+      "environmentVariables": {
+        "COMMENTEXTENSION_VS_ROOT_SUFFIX": "Exp"
+      }
     }
   }
 }
