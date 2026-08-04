@@ -14,7 +14,8 @@
                     <Style.Triggers>
                         <DataTrigger Binding="{Binding Classification}" Value="Keyword">
                             <Setter Property="Foreground"
-                                    Value="{DynamicResource {x:Static colors:EnvironmentColors.AccentMediumBrushKey}}" />
+                                    Value="{DynamicResource {x:Static styles:VsBrushes.WindowTextKey}}" />
+                            <Setter Property="FontWeight" Value="SemiBold" />
                         </DataTrigger>
                         <DataTrigger Binding="{Binding Classification}" Value="String">
                             <Setter Property="Foreground"
@@ -22,7 +23,7 @@
                         </DataTrigger>
                         <DataTrigger Binding="{Binding Classification}" Value="Number">
                             <Setter Property="Foreground"
-                                    Value="{DynamicResource {x:Static colors:EnvironmentColors.AccentDarkBrushKey}}" />
+                                    Value="{DynamicResource {x:Static styles:VsBrushes.WindowTextKey}}" />
                         </DataTrigger>
                         <DataTrigger Binding="{Binding Classification}" Value="Comment">
                             <Setter Property="Foreground"
@@ -147,53 +148,13 @@
                                Text="{Binding Marker}" />
                     <ItemsControl Grid.Column="3"
                                   Margin="5,2,20,2"
+                                  ItemTemplate="{StaticResource PullRequest.SyntaxTokenTemplate}"
                                   ItemsSource="{Binding Tokens}">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
                                 <StackPanel Orientation="Horizontal" />
                             </ItemsPanelTemplate>
                         </ItemsControl.ItemsPanel>
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <TextBlock FontFamily="Consolas"
-                                           FontSize="13"
-                                           TextWrapping="NoWrap"
-                                           Text="{Binding Text}">
-                                    <TextBlock.Style>
-                                        <Style TargetType="TextBlock">
-                                            <Setter Property="Foreground"
-                                                    Value="{DynamicResource {x:Static styles:VsBrushes.WindowTextKey}}" />
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding Classification}" Value="Keyword">
-                                                    <Setter Property="Foreground"
-                                                            Value="{DynamicResource {x:Static colors:EnvironmentColors.AccentMediumBrushKey}}" />
-                                                </DataTrigger>
-                                                <DataTrigger Binding="{Binding Classification}" Value="String">
-                                                    <Setter Property="Foreground"
-                                                            Value="{DynamicResource {x:Static colors:EnvironmentColors.ToolWindowValidationErrorTextBrushKey}}" />
-                                                </DataTrigger>
-                                                <DataTrigger Binding="{Binding Classification}" Value="Number">
-                                                    <Setter Property="Foreground"
-                                                            Value="{DynamicResource {x:Static colors:EnvironmentColors.AccentDarkBrushKey}}" />
-                                                </DataTrigger>
-                                                <DataTrigger Binding="{Binding Classification}" Value="Comment">
-                                                    <Setter Property="Foreground"
-                                                            Value="{DynamicResource {x:Static colors:EnvironmentColors.ClassDesignerCommentTextBrushKey}}" />
-                                                </DataTrigger>
-                                                <DataTrigger Binding="{Binding Classification}" Value="Preprocessor">
-                                                    <Setter Property="Foreground"
-                                                            Value="{DynamicResource {x:Static colors:EnvironmentColors.SystemGrayTextBrushKey}}" />
-                                                </DataTrigger>
-                                                <DataTrigger Binding="{Binding Classification}" Value="Type">
-                                                    <Setter Property="Foreground"
-                                                            Value="{DynamicResource {x:Static colors:EnvironmentColors.ControlLinkTextBrushKey}}" />
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </TextBlock.Style>
-                                </TextBlock>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
                     </ItemsControl>
                 </Grid>
             </Border>

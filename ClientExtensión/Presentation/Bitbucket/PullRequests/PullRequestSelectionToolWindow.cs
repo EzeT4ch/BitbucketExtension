@@ -1,3 +1,4 @@
+using ClientExtension.Presentation.Bitbucket.PullRequests.Data;
 using Microsoft.VisualStudio.Extensibility;
 using Microsoft.VisualStudio.Extensibility.ToolWindows;
 using Microsoft.VisualStudio.RpcContracts.RemoteUI;

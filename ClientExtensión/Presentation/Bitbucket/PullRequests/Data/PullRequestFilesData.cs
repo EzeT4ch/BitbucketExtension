@@ -5,7 +5,7 @@ using BitbucketAdapter.Domain.PullRequests;
 using ClientExtension.Application.Abstractions;
 using Microsoft.VisualStudio.Extensibility.UI;
 
-namespace ClientExtension.Presentation.Bitbucket.PullRequests;
+namespace ClientExtension.Presentation.Bitbucket.PullRequests.Data;
 
 [DataContract]
 internal sealed class PullRequestFilesData : NotifyPropertyChangedObject
@@ -203,42 +203,13 @@ internal sealed class PullRequestFilesData : NotifyPropertyChangedObject
 
     private void BuildTree(IReadOnlyList<BitbucketPullRequestFileChange> files)
     {
+        var roots = PullRequestFileTreeBuilder.Build(
+            files,
+            filePath => SelectedPath = filePath);
         Tree.Clear();
-        foreach (var file in files)
+        foreach (var root in roots)
         {
-            var segments = file.Path
-                .Replace('\\', '/')
-                .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            if (segments.Length == 0)
-            {
-                continue;
-            }
-
-            var currentNodes = Tree;
-            var parentFolders = new List<PullRequestFileTreeNode>();
-            for (var index = 0; index < segments.Length - 1; index++)
-            {
-                var folderName = segments[index];
-                var folder = currentNodes.FirstOrDefault(node =>
-                    !node.IsFile && string.Equals(node.Name, folderName, StringComparison.Ordinal));
-                if (folder is null)
-                {
-                    folder = PullRequestFileTreeNode.CreateFolder(folderName, index);
-                    InsertTreeNode(currentNodes, folder);
-                }
-
-                parentFolders.Add(folder);
-                currentNodes = folder.Children;
-            }
-
-            var fileItem = new PullRequestFileListItem(file);
-            InsertTreeNode(
-                currentNodes,
-                PullRequestFileTreeNode.CreateFile(fileItem, filePath => SelectedPath = filePath));
-            foreach (var folder in parentFolders)
-            {
-                folder.IncrementFileCount();
-            }
+            Tree.Add(root);
         }
     }
 
@@ -378,18 +349,16 @@ internal sealed class PullRequestFilesData : NotifyPropertyChangedObject
         }
 
         CanOpenDiffDocument = false;
-        DiffStatus = $"Abriendo vista completa del diff de {filePath}...";
+        DiffStatus = $"Abriendo diff nativo de Visual Studio para {filePath}...";
         try
         {
-            var commentsResult = await GetFileCommentsSafelyAsync(
+            var comparison = await _pullRequestChangesService.GetFileComparisonAsync(
                 workspaceSlug,
                 repositorySlug,
-                pullRequestId.Value,
-                filePath,
+                fileChange,
                 cancellationToken);
-            var comments = commentsResult.Comments;
-            var beforePath = fileChange.Before?.Path ?? fileChange.After?.Path ?? filePath;
-            var afterPath = fileChange.After?.Path ?? fileChange.Before?.Path ?? filePath;
+            var beforePath = comparison.Before?.Path ?? fileChange.Before?.Path ?? filePath;
+            var afterPath = comparison.After?.Path ?? fileChange.After?.Path ?? filePath;
             await _diffDocumentService.OpenAsync(
                 new PullRequestDiffDocument(
                     workspaceSlug,
@@ -399,29 +368,16 @@ internal sealed class PullRequestFilesData : NotifyPropertyChangedObject
                     fileChange.Before is null
                         ? "Base · archivo inexistente"
                         : $"Base · {ShortRevision(fileChange.Before.Revision)}",
+                    comparison.Before?.Content ?? string.Empty,
                     afterPath,
                     fileChange.After is null
                         ? "PR · archivo eliminado"
                         : $"PR · {ShortRevision(fileChange.After.Revision)}",
+                    comparison.After?.Content ?? string.Empty,
                     diff,
-                    comments.Select(comment => new PullRequestDiffComment(
-                            comment.Id,
-                            comment.FromLine,
-                            comment.ToLine,
-                            comment.AuthorDisplayName,
-                            comment.Content,
-                            comment.CreatedOn,
-                            comment.UpdatedOn))
-                        .ToArray()),
+                    Array.Empty<PullRequestDiffComment>()),
                 cancellationToken);
-            DiffStatus = !string.IsNullOrWhiteSpace(commentsResult.ErrorMessage)
-                ? $"Diff enriquecido de {filePath} abierto, pero no se pudieron cargar los comentarios: {commentsResult.ErrorMessage}"
-                : comments.Count switch
-            {
-                0 => $"Diff enriquecido de {filePath} abierto. No hay comentarios sin resolver.",
-                1 => $"Diff enriquecido de {filePath} abierto con 1 comentario sin resolver.",
-                _ => $"Diff enriquecido de {filePath} abierto con {comments.Count} comentarios sin resolver.",
-            };
+            DiffStatus = $"Diff nativo de Visual Studio abierto para {filePath}.";
         }
         catch (OperationCanceledException)
         {
@@ -429,7 +385,7 @@ internal sealed class PullRequestFilesData : NotifyPropertyChangedObject
         }
         catch (Exception exception)
         {
-            DiffStatus = $"No se pudo abrir la vista completa del diff: {exception.Message}";
+            DiffStatus = $"No se pudo abrir el diff de Visual Studio: {exception.Message}";
         }
         finally
         {
@@ -528,6 +484,61 @@ internal sealed class PullRequestFilesData : NotifyPropertyChangedObject
         }
     }
 
+    private static string ShortRevision(string revision) =>
+        revision.Length <= 8 ? revision : revision[..8];
+}
+
+internal static class PullRequestFileTreeBuilder
+{
+    internal static IReadOnlyList<PullRequestFileTreeNode> Build(
+        IReadOnlyList<BitbucketPullRequestFileChange> files,
+        Action<string> onFileSelected)
+    {
+        ArgumentNullException.ThrowIfNull(files);
+        ArgumentNullException.ThrowIfNull(onFileSelected);
+
+        var roots = new ObservableCollection<PullRequestFileTreeNode>();
+        foreach (var file in files)
+        {
+            var segments = file.Path
+                .Replace('\\', '/')
+                .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (segments.Length == 0)
+            {
+                continue;
+            }
+
+            var currentNodes = roots;
+            var parentFolders = new List<PullRequestFileTreeNode>();
+            for (var index = 0; index < segments.Length - 1; index++)
+            {
+                var folderName = segments[index];
+                var folder = currentNodes.FirstOrDefault(node =>
+                    !node.IsFile && string.Equals(node.Name, folderName, StringComparison.Ordinal));
+                if (folder is null)
+                {
+                    folder = PullRequestFileTreeNode.CreateFolder(folderName, index);
+                    InsertTreeNode(currentNodes, folder);
+                }
+
+                parentFolders.Add(folder);
+                currentNodes = folder.Children;
+            }
+
+            InsertTreeNode(
+                currentNodes,
+                PullRequestFileTreeNode.CreateFile(
+                    new PullRequestFileListItem(file),
+                    onFileSelected));
+            foreach (var folder in parentFolders)
+            {
+                folder.IncrementFileCount();
+            }
+        }
+
+        return roots.ToArray();
+    }
+
     private static void InsertTreeNode(
         ObservableCollection<PullRequestFileTreeNode> nodes,
         PullRequestFileTreeNode node)
@@ -548,9 +559,6 @@ internal sealed class PullRequestFilesData : NotifyPropertyChangedObject
             ? typeComparison
             : StringComparer.OrdinalIgnoreCase.Compare(left.Name, right.Name);
     }
-
-    private static string ShortRevision(string revision) =>
-        revision.Length <= 8 ? revision : revision[..8];
 }
 
 [DataContract]

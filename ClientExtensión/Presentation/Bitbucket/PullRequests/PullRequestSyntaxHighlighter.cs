@@ -23,7 +23,7 @@ internal static class PullRequestSyntaxHighlighter
         }
 
         var tokens = new List<PullRequestDiffToken>();
-        /*foreach (var syntaxToken in SyntaxFactory.ParseTokens(text))
+        foreach (var syntaxToken in SyntaxFactory.ParseTokens(text))
         {
             AppendTrivia(tokens, syntaxToken.LeadingTrivia);
             if (!syntaxToken.IsKind(SyntaxKind.EndOfFileToken) && syntaxToken.Text.Length > 0)
@@ -32,9 +32,15 @@ internal static class PullRequestSyntaxHighlighter
             }
 
             AppendTrivia(tokens, syntaxToken.TrailingTrivia);
-        }*/
+        }
 
-        return tokens.Count == 0 ? [new PullRequestDiffToken(text, "Plain")] : tokens;
+        if (tokens.Count == 0 ||
+            !string.Equals(string.Concat(tokens.Select(token => token.Text)), text, StringComparison.Ordinal))
+        {
+            return [new PullRequestDiffToken(text, "Plain")];
+        }
+
+        return tokens;
     }
 
     private static void AppendTrivia(List<PullRequestDiffToken> tokens, SyntaxTriviaList triviaList)

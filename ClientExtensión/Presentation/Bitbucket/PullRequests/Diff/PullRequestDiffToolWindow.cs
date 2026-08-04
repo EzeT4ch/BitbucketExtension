@@ -2,7 +2,7 @@ using Microsoft.VisualStudio.Extensibility;
 using Microsoft.VisualStudio.Extensibility.ToolWindows;
 using Microsoft.VisualStudio.RpcContracts.RemoteUI;
 
-namespace ClientExtension.Presentation.Bitbucket.PullRequests;
+namespace ClientExtension.Presentation.Bitbucket.PullRequests.Diff;
 
 [VisualStudioContribution]
 internal sealed class PullRequestDiffToolWindow : ToolWindow

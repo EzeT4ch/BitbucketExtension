@@ -183,6 +183,8 @@
                                       IsEnabled="{Binding PullRequestBrowser.Files.IsSelectorEnabled}">
                                 <TreeView.ItemContainerStyle>
                                     <Style TargetType="TreeViewItem">
+                                        <Setter Property="Foreground"
+                                                Value="{DynamicResource {x:Static styles:VsBrushes.WindowTextKey}}" />
                                         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
                                         <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
                                         <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
@@ -251,7 +253,7 @@
                                         Margin="12,0,0,0"
                                         Padding="12,5"
                                         VerticalAlignment="Center"
-                                        Content="Abrir diff enriquecido"
+                                        Content="Abrir diff en Visual Studio"
                                         Command="{Binding PullRequestBrowser.Files.OpenDiffDocumentCommand}"
                                         CommandParameter="{Binding PullRequestBrowser.Files.SelectedPath}"
                                         IsEnabled="{Binding PullRequestBrowser.Files.CanOpenDiffDocument}" />
@@ -345,7 +347,8 @@
                                                                                     <Style.Triggers>
                                                                                         <DataTrigger Binding="{Binding Classification}" Value="Keyword">
                                                                                             <Setter Property="Foreground"
-                                                                                                    Value="{DynamicResource {x:Static colors:EnvironmentColors.AccentMediumBrushKey}}" />
+                                                                                                    Value="{DynamicResource {x:Static styles:VsBrushes.WindowTextKey}}" />
+                                                                                            <Setter Property="FontWeight" Value="SemiBold" />
                                                                                         </DataTrigger>
                                                                                         <DataTrigger Binding="{Binding Classification}" Value="String">
                                                                                             <Setter Property="Foreground"
@@ -353,7 +356,7 @@
                                                                                         </DataTrigger>
                                                                                         <DataTrigger Binding="{Binding Classification}" Value="Number">
                                                                                             <Setter Property="Foreground"
-                                                                                                    Value="{DynamicResource {x:Static colors:EnvironmentColors.AccentDarkBrushKey}}" />
+                                                                                                    Value="{DynamicResource {x:Static styles:VsBrushes.WindowTextKey}}" />
                                                                                         </DataTrigger>
                                                                                         <DataTrigger Binding="{Binding Classification}" Value="Comment">
                                                                                             <Setter Property="Foreground"

@@ -4,7 +4,7 @@ using BitbucketAdapter.Application.Abstractions;
 using BitbucketAdapter.Domain.PullRequests;
 using Microsoft.VisualStudio.Extensibility.UI;
 
-namespace ClientExtension.Presentation.Bitbucket.PullRequests;
+namespace ClientExtension.Presentation.Bitbucket.PullRequests.Data;
 
 [DataContract]
 internal sealed class PullRequestCommentsData : NotifyPropertyChangedObject

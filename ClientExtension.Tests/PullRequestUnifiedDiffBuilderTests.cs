@@ -82,6 +82,48 @@ public sealed class PullRequestUnifiedDiffBuilderTests
     }
 
     [Fact]
+    public void Build_WhenCSharpLineContainsGenericKeywords_PreservesOriginalText()
+    {
+        const string source = "\tpublic  Result<string, string> ProcessLotFile(FileRequest fileRequest)";
+        var diff = CreateSingleLineDiff("old value", source);
+
+        var rows = PullRequestUnifiedDiffBuilder.Build(diff, [], "src/File.cs");
+
+        var addedRow = Assert.Single(rows, row => row.ChangeType == "Added");
+        Assert.Equal(source, addedRow.Content);
+        Assert.Equal(source, string.Concat(addedRow.Tokens.Select(token => token.Text)));
+        Assert.Contains(addedRow.Tokens, token => token is { Classification: "Keyword", Text: "public" });
+        Assert.Equal(2, addedRow.Tokens.Count(token =>
+            token is { Classification: "Keyword", Text: "string" }));
+    }
+
+    [Fact]
+    public void Build_WhenCSharpLineIsIncomplete_PreservesOriginalText()
+    {
+        const string source = "\tpublic  Result<string,>(";
+        var diff = CreateSingleLineDiff("old value", source);
+
+        var rows = PullRequestUnifiedDiffBuilder.Build(diff, [], "src/File.cs");
+
+        var addedRow = Assert.Single(rows, row => row.ChangeType == "Added");
+        Assert.Equal(source, addedRow.Content);
+        Assert.Equal(source, string.Concat(addedRow.Tokens.Select(token => token.Text)));
+    }
+
+    [Fact]
+    public void BuildSplit_WhenCSharpLineContainsGenericKeywords_PreservesOriginalText()
+    {
+        const string source = "\tpublic  Result<string, string> ProcessLotFile(FileRequest fileRequest)";
+        var diff = CreateSingleLineDiff("old value", source);
+
+        var rows = PullRequestUnifiedDiffBuilder.BuildSplit(diff, [], "src/File.cs");
+
+        var changedRow = Assert.Single(rows, row => row.Right?.ChangeType == "Added");
+        Assert.Equal(source, changedRow.Right?.Content);
+        Assert.Equal(source, string.Concat(changedRow.Right!.Tokens.Select(token => token.Text)));
+    }
+
+    [Fact]
     public void BuildSplit_PairsRemovedAndAddedLinesInTheSameRow()
     {
         var rows = PullRequestUnifiedDiffBuilder.BuildSplit(Diff, [], "src/File.cs");
@@ -130,6 +172,16 @@ public sealed class PullRequestUnifiedDiffBuilderTests
         Assert.True(index > 0);
         return index;
     }
+
+    private static string CreateSingleLineDiff(string before, string after) =>
+        string.Join(
+            '\n',
+            "diff --git a/src/File.cs b/src/File.cs",
+            "--- a/src/File.cs",
+            "+++ b/src/File.cs",
+            "@@ -1 +1 @@",
+            $"-{before}",
+            $"+{after}");
 
     private static BitbucketPullRequestComment CreateComment(long id, int? fromLine, int? toLine) =>
         new(

@@ -11,8 +11,10 @@ internal sealed record PullRequestDiffDocument(
     long PullRequestId,
     string BeforePath,
     string BeforeLabel,
+    string BeforeContent,
     string AfterPath,
     string AfterLabel,
+    string AfterContent,
     string RawDiff,
     IReadOnlyList<PullRequestDiffComment> Comments);
 

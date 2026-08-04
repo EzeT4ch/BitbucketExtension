@@ -2,7 +2,7 @@ using System.Diagnostics;
 using BitbucketAdapter.Application.Abstractions;
 using BitbucketAdapter.Application.Abstractions.OAuth;
 using ClientExtension.Presentation.Bitbucket.Authentication;
-using ClientExtension.Presentation.Bitbucket.PullRequests;
+using ClientExtension.Presentation.Bitbucket.PullRequests.Data;
 using Microsoft.VisualStudio.Extensibility;
 using Microsoft.VisualStudio.Extensibility.Commands;
 using Microsoft.VisualStudio.Extensibility.Shell;

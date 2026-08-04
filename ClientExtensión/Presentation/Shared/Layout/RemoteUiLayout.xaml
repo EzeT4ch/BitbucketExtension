@@ -15,6 +15,9 @@
     <Style TargetType="ComboBox"
            BasedOn="{StaticResource {x:Static styles:VsResourceKeys.ComboBoxStyleKey}}" />
 
+    <Style TargetType="Button"
+           BasedOn="{StaticResource {x:Static styles:VsResourceKeys.ButtonStyleKey}}" />
+
     <Style x:Key="Layout.PageContainer"
            TargetType="Grid">
         <Setter Property="Margin"

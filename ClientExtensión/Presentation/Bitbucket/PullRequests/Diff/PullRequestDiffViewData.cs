@@ -4,7 +4,7 @@ using BitbucketAdapter.Domain.PullRequests;
 using ClientExtension.Application.Abstractions;
 using Microsoft.VisualStudio.Extensibility.UI;
 
-namespace ClientExtension.Presentation.Bitbucket.PullRequests;
+namespace ClientExtension.Presentation.Bitbucket.PullRequests.Diff;
 
 [DataContract]
 internal sealed class PullRequestDiffViewData : NotifyPropertyChangedObject
