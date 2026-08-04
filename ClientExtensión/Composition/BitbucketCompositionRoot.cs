@@ -45,7 +45,12 @@ internal static class BitbucketCompositionRoot
         services.AddSingleton<IBitbucketRepositoryService, BitbucketRepositoryService>();
         services.AddSingleton<IBitbucketPullRequestService, BitbucketPullRequestService>();
         services.AddSingleton<IBitbucketPullRequestChangesService, BitbucketPullRequestChangesService>();
-        services.AddSingleton<IPullRequestDiffDocumentService, VisualStudioPullRequestDiffDocumentService>();
+        services.AddSingleton<IBitbucketPullRequestCommentService, BitbucketPullRequestCommentService>();
+        services.AddSingleton<PullRequestDiffViewData>();
+        services.AddSingleton<IPullRequestDiffDocumentService, RemotePullRequestDiffDocumentService>();
+        services.AddSingleton<PullRequestDetailData>();
+        services.AddSingleton<PullRequestFilesData>();
+        services.AddSingleton<PullRequestCommentsData>();
         services.AddSingleton<PullRequestBrowserData>();
         services.AddSingleton<PullRequestSelectionData>();
         services.AddSingleton<IHttpRequestSender>(provider => BuildSender(
