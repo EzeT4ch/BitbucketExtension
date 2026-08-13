@@ -9,4 +9,5 @@ public sealed record RequestMessage(
     IReadOnlyDictionary<string, string>? QueryParameters = null,
     RequestBody? Body = null,
     TimeSpan? Timeout = null,
-    AuthCredential? Credential = null);
+    AuthCredential? Credential = null,
+    ResponseBodyMode ResponseBodyMode = ResponseBodyMode.Text);

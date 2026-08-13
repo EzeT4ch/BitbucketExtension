@@ -12,6 +12,10 @@ internal sealed class PullRequestCommentsData : NotifyPropertyChangedObject
     private readonly IBitbucketPullRequestCommentService _pullRequestCommentService;
     private readonly SemaphoreSlim _loadSemaphore = new(1, 1);
 
+    private string? _workspaceSlug;
+    private string? _repositorySlug;
+    private long? _pullRequestId;
+    private PullRequestCommentListItem? _activeReplyItem;
     private string _status = "Seleccioná un Pull Request para cargar sus comentarios.";
     private string _allCommentsHeader = "Todos los comentarios (0)";
     private string _tabTitle = "Comentarios";
@@ -56,6 +60,8 @@ internal sealed class PullRequestCommentsData : NotifyPropertyChangedObject
         CancellationToken cancellationToken)
     {
         var loadVersion = Interlocked.Increment(ref _loadVersion);
+        CloseActiveReply();
+        ClearReplyContext();
         Status = $"Cargando comentarios del Pull Request #{pullRequestId}...";
         var lockTaken = false;
 
@@ -78,15 +84,15 @@ internal sealed class PullRequestCommentsData : NotifyPropertyChangedObject
                 return;
             }
 
+            SetReplyContext(workspaceSlug, repositorySlug, pullRequestId);
             All.Clear();
             Unresolved.Clear();
             foreach (var comment in comments)
             {
-                var item = new PullRequestCommentListItem(comment);
-                All.Add(item);
+                All.Add(CreateListItem(comment));
                 if (!comment.IsResolved && !comment.IsDeleted)
                 {
-                    Unresolved.Add(item);
+                    Unresolved.Add(CreateListItem(comment));
                 }
             }
 
@@ -129,11 +135,129 @@ internal sealed class PullRequestCommentsData : NotifyPropertyChangedObject
 
     private void ClearContent()
     {
+        CloseActiveReply();
+        ClearReplyContext();
         Unresolved.Clear();
         All.Clear();
         AllHeader = "Todos los comentarios (0)";
         TabTitle = "Comentarios";
         Status = "Seleccioná un Pull Request para cargar sus comentarios.";
+    }
+
+    private PullRequestCommentListItem CreateListItem(BitbucketPullRequestComment comment) =>
+        new(comment, OpenReply, CancelReply, SendReplyAsync);
+
+    private void OpenReply(PullRequestCommentListItem item)
+    {
+        if (!item.CanReply)
+        {
+            return;
+        }
+
+        if (!ReferenceEquals(_activeReplyItem, item))
+        {
+            CloseActiveReply();
+            _activeReplyItem = item;
+        }
+
+        item.OpenReplyEditor();
+    }
+
+    private void CancelReply(PullRequestCommentListItem item)
+    {
+        if (ReferenceEquals(_activeReplyItem, item))
+        {
+            _activeReplyItem = null;
+        }
+
+        item.CloseReplyEditor(clearDraft: true);
+    }
+
+    private async Task SendReplyAsync(
+        PullRequestCommentListItem item,
+        string markdownContent,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(markdownContent))
+        {
+            item.SetReplyStatus("Escribí una respuesta antes de enviarla.");
+            return;
+        }
+
+        var loadVersion = Volatile.Read(ref _loadVersion);
+        var workspaceSlug = _workspaceSlug;
+        var repositorySlug = _repositorySlug;
+        var pullRequestId = _pullRequestId;
+        if (string.IsNullOrWhiteSpace(workspaceSlug) ||
+            string.IsNullOrWhiteSpace(repositorySlug) ||
+            pullRequestId is null)
+        {
+            item.SetReplyStatus("El Pull Request cambió. Volvé a abrir la respuesta.");
+            return;
+        }
+
+        item.SetReplyStatus("Enviando respuesta...");
+        try
+        {
+            await _pullRequestCommentService.CreateReplyAsync(
+                workspaceSlug,
+                repositorySlug,
+                pullRequestId.Value,
+                item.Id,
+                markdownContent,
+                cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            if (IsCurrent(loadVersion))
+            {
+                item.SetReplyStatus("Se canceló el envío de la respuesta.");
+            }
+
+            return;
+        }
+        catch (Exception exception)
+        {
+            if (IsCurrent(loadVersion))
+            {
+                item.SetReplyStatus($"No se pudo enviar la respuesta: {exception.Message}");
+            }
+
+            return;
+        }
+
+        if (!IsCurrent(loadVersion))
+        {
+            return;
+        }
+
+        _activeReplyItem = null;
+        item.CloseReplyEditor(clearDraft: true);
+        await LoadAsync(
+            workspaceSlug,
+            repositorySlug,
+            pullRequestId.Value,
+            cancellationToken);
+    }
+
+    private void CloseActiveReply()
+    {
+        _activeReplyItem?.CloseReplyEditor(clearDraft: true);
+        _activeReplyItem = null;
+    }
+
+    private void SetReplyContext(string workspaceSlug, string repositorySlug, long pullRequestId)
+    {
+        _workspaceSlug = workspaceSlug;
+        _repositorySlug = repositorySlug;
+        _pullRequestId = pullRequestId;
+    }
+
+    private void ClearReplyContext()
+    {
+        _workspaceSlug = null;
+        _repositorySlug = null;
+        _pullRequestId = null;
     }
 
     private static string BuildStatus(int commentCount, int unresolvedCount) =>
@@ -149,10 +273,20 @@ internal sealed class PullRequestCommentsData : NotifyPropertyChangedObject
 }
 
 [DataContract]
-internal sealed class PullRequestCommentListItem
+internal sealed class PullRequestCommentListItem : NotifyPropertyChangedObject
 {
-    public PullRequestCommentListItem(BitbucketPullRequestComment comment)
+    private string _replyContent = string.Empty;
+    private string _replyStatus = string.Empty;
+    private bool _isReplyEditorOpen;
+
+    public PullRequestCommentListItem(
+        BitbucketPullRequestComment comment,
+        Action<PullRequestCommentListItem> openReply,
+        Action<PullRequestCommentListItem> cancelReply,
+        Func<PullRequestCommentListItem, string, CancellationToken, Task> sendReplyAsync)
     {
+        Id = comment.Id;
+        CanReply = !comment.IsDeleted;
         Content = FormatContent(comment.Content);
         Author = comment.AuthorDisplayName;
         AuthorInitials = BuildInitials(comment.AuthorDisplayName);
@@ -162,7 +296,31 @@ internal sealed class PullRequestCommentListItem
             ? "Comentario principal"
             : $"Respuesta al comentario #{comment.ParentId.Value}";
         State = BuildState(comment);
+        OpenReplyCommand = new AsyncCommand((_, _) =>
+        {
+            openReply(this);
+            return Task.CompletedTask;
+        })
+        {
+            CanExecute = CanReply,
+        };
+        CancelReplyCommand = new AsyncCommand((_, _) =>
+        {
+            cancelReply(this);
+            return Task.CompletedTask;
+        });
+        SendReplyCommand = new AsyncCommand((parameter, cancellationToken) =>
+            sendReplyAsync(this, parameter as string ?? string.Empty, cancellationToken))
+        {
+            CanExecute = false,
+        };
     }
+
+    [DataMember]
+    public long Id { get; }
+
+    [DataMember]
+    public bool CanReply { get; }
 
     [DataMember]
     public string Content { get; }
@@ -184,6 +342,63 @@ internal sealed class PullRequestCommentListItem
 
     [DataMember]
     public string State { get; }
+
+    [DataMember]
+    public string ReplyContent
+    {
+        get => _replyContent;
+        set
+        {
+            if (SetProperty(ref _replyContent, value))
+            {
+                SendReplyCommand.CanExecute = !string.IsNullOrWhiteSpace(value);
+            }
+        }
+    }
+
+    [DataMember]
+    public string ReplyStatus
+    {
+        get => _replyStatus;
+        private set => SetProperty(ref _replyStatus, value);
+    }
+
+    [DataMember]
+    public bool IsReplyEditorOpen
+    {
+        get => _isReplyEditorOpen;
+        private set => SetProperty(ref _isReplyEditorOpen, value);
+    }
+
+    [DataMember]
+    public AsyncCommand OpenReplyCommand { get; }
+
+    [DataMember]
+    public AsyncCommand CancelReplyCommand { get; }
+
+    [DataMember]
+    public AsyncCommand SendReplyCommand { get; }
+
+    internal void OpenReplyEditor()
+    {
+        ReplyStatus = string.Empty;
+        IsReplyEditorOpen = true;
+    }
+
+    internal void CloseReplyEditor(bool clearDraft)
+    {
+        IsReplyEditorOpen = false;
+        ReplyStatus = string.Empty;
+        if (clearDraft)
+        {
+            ReplyContent = string.Empty;
+        }
+    }
+
+    internal void SetReplyStatus(string status)
+    {
+        ReplyStatus = status;
+    }
 
     private static string BuildLocation(BitbucketPullRequestComment comment)
     {

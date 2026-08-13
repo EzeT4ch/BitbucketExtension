@@ -18,6 +18,7 @@ internal sealed class PullRequestFilesData : NotifyPropertyChangedObject
     private readonly SemaphoreSlim _filesLoadSemaphore = new(1, 1);
     private readonly SemaphoreSlim _diffLoadSemaphore = new(1, 1);
 
+    private IPullRequestReplyTarget? _activeDiffReplyRow;
     private string? _workspaceSlug;
     private string? _repositorySlug;
     private long? _pullRequestId;
@@ -294,11 +295,28 @@ internal sealed class PullRequestFilesData : NotifyPropertyChangedObject
                 return;
             }
 
-            foreach (var row in PullRequestUnifiedDiffBuilder.Build(
-                         _selectedFileRawDiff,
-                         commentsResult.Comments,
-                         filePath))
+            var rows = PullRequestUnifiedDiffBuilder.Build(
+                _selectedFileRawDiff,
+                commentsResult.Comments,
+                filePath);
+            await LocalizeCommentImagesAsync(
+                rows,
+                workspaceSlug,
+                repositorySlug,
+                cancellationToken);
+            if (!IsCurrentFileSelection(filePath, loadVersion, diffVersion))
             {
+                return;
+            }
+
+            foreach (var row in rows)
+            {
+                row.ConfigureReply(OpenDiffReply, CancelDiffReply, SendDiffReplyAsync);
+                foreach (var reply in row.Replies)
+                {
+                    reply.ConfigureReply(OpenDiffReply, CancelDiffReply, SendDiffReplyAsync);
+                }
+
                 DiffRows.Add(row);
             }
 
@@ -398,6 +416,160 @@ internal sealed class PullRequestFilesData : NotifyPropertyChangedObject
     private bool IsCurrentLoad(long loadVersion) =>
         loadVersion == Volatile.Read(ref _loadVersion);
 
+    private void OpenDiffReply(IPullRequestReplyTarget row)
+    {
+        if (!row.CanReply || !ContainsDiffComment(row))
+        {
+            return;
+        }
+
+        if (!ReferenceEquals(_activeDiffReplyRow, row))
+        {
+            CloseActiveDiffReply();
+            _activeDiffReplyRow = row;
+        }
+
+        row.OpenReplyEditor();
+    }
+
+    private async Task LocalizeCommentImagesAsync(
+        IReadOnlyList<PullRequestDiffRow> rows,
+        string workspaceSlug,
+        string repositorySlug,
+        CancellationToken cancellationToken)
+    {
+        var imageBlocks = rows
+            .Where(row => row.RowType == "Comment")
+            .SelectMany(row => row.ContentBlocks.Concat(
+                row.Replies.SelectMany(reply => reply.ContentBlocks)))
+            .Where(block => block.Kind == "Image" && !string.IsNullOrWhiteSpace(block.ImageUrl))
+            .GroupBy(block => block.ImageUrl, StringComparer.Ordinal)
+            .ToArray();
+
+        foreach (var imageGroup in imageBlocks)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                var sourceUri = new Uri(imageGroup.Key, UriKind.Absolute);
+                var image = await _pullRequestCommentService.GetImageAsync(
+                    workspaceSlug,
+                    repositorySlug,
+                    sourceUri,
+                    cancellationToken);
+                var localImageUrl = await PullRequestCommentImageCache.StoreAsync(
+                    sourceUri,
+                    image,
+                    cancellationToken);
+                foreach (var block in imageGroup)
+                {
+                    block.UseLocalImage(localImageUrl);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception)
+            {
+                foreach (var block in imageGroup)
+                {
+                    block.SetImageUnavailable();
+                }
+            }
+        }
+    }
+
+    private bool ContainsDiffComment(IPullRequestReplyTarget row) =>
+        DiffRows.Any(candidate =>
+            ReferenceEquals(candidate, row) ||
+            candidate.Replies.Any(reply => ReferenceEquals(reply, row)));
+
+    private void CancelDiffReply(IPullRequestReplyTarget row)
+    {
+        if (ReferenceEquals(_activeDiffReplyRow, row))
+        {
+            _activeDiffReplyRow = null;
+        }
+
+        row.CloseReplyEditor(clearDraft: true);
+    }
+
+    private async Task SendDiffReplyAsync(
+        IPullRequestReplyTarget row,
+        string markdownContent,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(markdownContent))
+        {
+            row.SetReplyStatus("Escribí una respuesta antes de enviarla.");
+            return;
+        }
+
+        var workspaceSlug = _workspaceSlug;
+        var repositorySlug = _repositorySlug;
+        var pullRequestId = _pullRequestId;
+        var filePath = SelectedPath;
+        var commentId = row.CommentId;
+        var loadVersion = Volatile.Read(ref _loadVersion);
+        var diffVersion = Volatile.Read(ref _diffVersion);
+        if (string.IsNullOrWhiteSpace(workspaceSlug) ||
+            string.IsNullOrWhiteSpace(repositorySlug) ||
+            pullRequestId is null or <= 0 ||
+            string.IsNullOrWhiteSpace(filePath) ||
+            commentId is null or <= 0 ||
+            !IsCurrentFileSelection(filePath, loadVersion, diffVersion))
+        {
+            row.SetReplyStatus("El archivo o el Pull Request cambió. Volvé a abrir la respuesta.");
+            return;
+        }
+
+        row.SetReplyStatus("Enviando respuesta...");
+        try
+        {
+            await _pullRequestCommentService.CreateReplyAsync(
+                workspaceSlug,
+                repositorySlug,
+                pullRequestId.Value,
+                commentId.Value,
+                markdownContent,
+                cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            if (IsCurrentFileSelection(filePath, loadVersion, diffVersion))
+            {
+                row.SetReplyStatus("Se canceló el envío de la respuesta.");
+            }
+
+            return;
+        }
+        catch (Exception exception)
+        {
+            if (IsCurrentFileSelection(filePath, loadVersion, diffVersion))
+            {
+                row.SetReplyStatus($"No se pudo enviar la respuesta: {exception.Message}");
+            }
+
+            return;
+        }
+
+        if (!IsCurrentFileSelection(filePath, loadVersion, diffVersion))
+        {
+            return;
+        }
+
+        _activeDiffReplyRow = null;
+        row.CloseReplyEditor(clearDraft: true);
+        LoadSelectedFileDiff(filePath);
+    }
+
+    private void CloseActiveDiffReply()
+    {
+        _activeDiffReplyRow?.CloseReplyEditor(clearDraft: true);
+        _activeDiffReplyRow = null;
+    }
+
     private async Task<(IReadOnlyList<BitbucketPullRequestComment> Comments, string? ErrorMessage)>
         GetFileCommentsSafelyAsync(
             string workspaceSlug,
@@ -443,6 +615,7 @@ internal sealed class PullRequestFilesData : NotifyPropertyChangedObject
 
     private void ResetDiff()
     {
+        CloseActiveDiffReply();
         _selectedFileRawDiff = null;
         CanOpenDiffDocument = false;
         SelectedFileTitle = "Diff";

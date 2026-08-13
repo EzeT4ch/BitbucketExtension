@@ -12,7 +12,7 @@ internal class ClientExtensionEntrypoint : Extension
         Metadata = new(
             id: "ClientExtension.9d3f7f7a-9b7a-4e8a-9d0a-9b8b8b8f1d4c",
             version: this.ExtensionAssemblyVersion,
-            publisherName: "S.Sotelo, E.Benitez",
+            publisherName: "Ezequiel Benitez",
             displayName: "Bitbucket/Jira Client Extension",
             description: "Gestión de Pull Requests de Bitbucket e Historias de Usuario de Jira desde Visual Studio."),
     };

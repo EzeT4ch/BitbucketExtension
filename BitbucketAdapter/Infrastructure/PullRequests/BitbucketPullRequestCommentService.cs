@@ -22,6 +22,107 @@ public sealed class BitbucketPullRequestCommentService : IBitbucketPullRequestCo
         _requestSender = requestSender;
     }
 
+    public async Task<BitbucketPullRequestCommentImage> GetImageAsync(
+        string workspaceSlug,
+        string repositorySlug,
+        Uri imageUri,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceSlug);
+        ArgumentException.ThrowIfNullOrWhiteSpace(repositorySlug);
+        ArgumentNullException.ThrowIfNull(imageUri);
+        ValidateImageUri(workspaceSlug, repositorySlug, imageUri);
+
+        var request = new RequestMessage(
+            HttpMethodType.Get,
+            imageUri,
+            Headers: new Dictionary<string, string> { ["Accept"] = "image/*" },
+            ResponseBodyMode: ResponseBodyMode.Binary);
+        var response = await _requestSender.SendAsync(request, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new BitbucketPullRequestCommentException(
+                $"Bitbucket no pudo descargar la imagen del comentario. Status: {response.StatusCode}.");
+        }
+
+        if (response.ContentBytes is not { Length: > 0 } content)
+        {
+            throw new BitbucketPullRequestCommentException(
+                "La imagen del comentario descargada desde Bitbucket vino vacía.");
+        }
+
+        var contentType = DetectSupportedImageContentType(content);
+        if (contentType is null)
+        {
+            throw new BitbucketPullRequestCommentException(
+                "Bitbucket devolvió un formato de imagen no compatible.");
+        }
+
+        return new BitbucketPullRequestCommentImage(content, contentType);
+    }
+
+    public async Task<long> CreateReplyAsync(
+        string workspaceSlug,
+        string repositorySlug,
+        long pullRequestId,
+        long parentCommentId,
+        string markdownContent,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceSlug);
+        ArgumentException.ThrowIfNullOrWhiteSpace(repositorySlug);
+        ArgumentException.ThrowIfNullOrWhiteSpace(markdownContent);
+        if (pullRequestId <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(pullRequestId));
+        }
+
+        if (parentCommentId <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(parentCommentId));
+        }
+
+        var body = JsonSerializer.Serialize(new CreateReplyRequestDto(
+            new ContentDto(markdownContent),
+            new ParentDto(parentCommentId)));
+        var request = new RequestMessage(
+            HttpMethodType.Post,
+            BuildCommentsEndpoint(workspaceSlug, repositorySlug, pullRequestId),
+            Headers: Headers,
+            Body: new RequestBody("application/json", body));
+        var response = await _requestSender.SendAsync(request, cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new BitbucketPullRequestCommentException(
+                $"Bitbucket no pudo crear la respuesta al comentario. Status: {response.StatusCode}.");
+        }
+
+        if (string.IsNullOrWhiteSpace(response.Content))
+        {
+            throw new BitbucketPullRequestCommentException(
+                "La respuesta de Bitbucket al crear el comentario vino vacía.");
+        }
+
+        try
+        {
+            var createdReply = JsonSerializer.Deserialize<CreateReplyResponseDto>(response.Content);
+            if (createdReply?.Id is null or <= 0)
+            {
+                throw new BitbucketPullRequestCommentException(
+                    "La respuesta de Bitbucket no contiene un identificador de comentario válido.");
+            }
+
+            return createdReply.Id.Value;
+        }
+        catch (JsonException exception)
+        {
+            throw new BitbucketPullRequestCommentException(
+                "No se pudo interpretar la respuesta de Bitbucket al crear el comentario.",
+                exception);
+        }
+    }
+
     public async Task<IReadOnlyList<BitbucketPullRequestComment>> GetAllAsync(
         string workspaceSlug,
         string repositorySlug,
@@ -66,8 +167,10 @@ public sealed class BitbucketPullRequestCommentService : IBitbucketPullRequestCo
             BuildCommentsEndpoint(workspaceSlug, repositorySlug, pullRequestId),
             cancellationToken);
 
-        return commentsById.Values
+        var mappedComments = commentsById.Values
             .Select(comment => MapComment(comment, commentsById))
+            .ToDictionary(comment => comment.Id);
+        var matchingRootIds = mappedComments.Values
             .Where(comment =>
                 !comment.IsDeleted &&
                 !comment.IsPending &&
@@ -78,9 +181,21 @@ public sealed class BitbucketPullRequestCommentService : IBitbucketPullRequestCo
                 NormalizePath(comment.FilePath ?? string.Empty),
                 normalizedFilePath,
                 StringComparison.Ordinal))
-            .OrderBy(comment => comment.ToLine ?? comment.FromLine ?? int.MaxValue)
-            .ThenBy(comment => comment.CreatedOn ?? DateTimeOffset.MinValue)
-            .ThenBy(comment => comment.Id)
+            .Select(comment => comment.Id)
+            .ToHashSet();
+
+        return mappedComments.Values
+            .Select(comment => new
+            {
+                Comment = comment,
+                RootId = FindRootCommentId(commentsById[comment.Id], commentsById),
+            })
+            .Where(item => matchingRootIds.Contains(item.RootId) && !item.Comment.IsPending)
+            .OrderBy(item => mappedComments[item.RootId].ToLine ?? mappedComments[item.RootId].FromLine ?? int.MaxValue)
+            .ThenBy(item => mappedComments[item.RootId].CreatedOn ?? DateTimeOffset.MinValue)
+            .ThenBy(item => item.Comment.CreatedOn ?? DateTimeOffset.MinValue)
+            .ThenBy(item => item.Comment.Id)
+            .Select(item => item.Comment)
             .ToArray();
     }
 
@@ -162,6 +277,7 @@ public sealed class BitbucketPullRequestCommentService : IBitbucketPullRequestCo
         IReadOnlyDictionary<long, PullRequestCommentDto> commentsById)
     {
         var isDeleted = comment.Deleted ?? false;
+        var inline = ResolveInline(comment, commentsById);
         var content = isDeleted
             ? "Comentario eliminado."
             : string.IsNullOrWhiteSpace(comment.Content?.Raw)
@@ -180,9 +296,110 @@ public sealed class BitbucketPullRequestCommentService : IBitbucketPullRequestCo
             isDeleted,
             comment.Pending ?? false,
             IsThreadResolved(comment, commentsById),
-            comment.Inline?.Path?.Trim(),
-            comment.Inline?.From,
-            comment.Inline?.To);
+            inline?.Path?.Trim(),
+            inline?.From,
+            inline?.To);
+    }
+
+    private static void ValidateImageUri(
+        string workspaceSlug,
+        string repositorySlug,
+        Uri imageUri)
+    {
+        if (!imageUri.IsAbsoluteUri)
+        {
+            throw new ArgumentException(
+                "La imagen debe pertenecer al repositorio de Bitbucket actual.",
+                nameof(imageUri));
+        }
+
+        var segments = imageUri.AbsolutePath
+            .Split('/', StringSplitOptions.RemoveEmptyEntries)
+            .Select(Uri.UnescapeDataString)
+            .ToArray();
+        if (imageUri.Scheme != Uri.UriSchemeHttps ||
+            !string.Equals(imageUri.Host, "bitbucket.org", StringComparison.OrdinalIgnoreCase) ||
+            segments.Length < 4 ||
+            !string.Equals(segments[0], workspaceSlug, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(segments[1], repositorySlug, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(segments[2], "images", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException(
+                "La imagen debe pertenecer al repositorio de Bitbucket actual.",
+                nameof(imageUri));
+        }
+    }
+
+    private static string? DetectSupportedImageContentType(ReadOnlySpan<byte> content)
+    {
+        if (content.Length >= 8 &&
+            content[..8].SequenceEqual(new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }))
+        {
+            return "image/png";
+        }
+
+        if (content.Length >= 3 && content[0] == 0xFF && content[1] == 0xD8 && content[2] == 0xFF)
+        {
+            return "image/jpeg";
+        }
+
+        if (content.Length >= 6 &&
+            (content[..6].SequenceEqual("GIF87a"u8) || content[..6].SequenceEqual("GIF89a"u8)))
+        {
+            return "image/gif";
+        }
+
+        return content.Length >= 2 && content[0] == 'B' && content[1] == 'M'
+            ? "image/bmp"
+            : null;
+    }
+
+    private static long FindRootCommentId(
+        PullRequestCommentDto comment,
+        IReadOnlyDictionary<long, PullRequestCommentDto> commentsById)
+    {
+        var visitedCommentIds = new HashSet<long>();
+        var currentComment = comment;
+        while (currentComment.Parent?.Id is long parentId &&
+               commentsById.TryGetValue(parentId, out var parentComment))
+        {
+            if (!visitedCommentIds.Add(parentId))
+            {
+                throw new BitbucketPullRequestCommentException(
+                    "La respuesta de Bitbucket contiene una relación circular entre comentarios.");
+            }
+
+            currentComment = parentComment;
+        }
+
+        return currentComment.Id!.Value;
+    }
+
+    private static InlineDto? ResolveInline(
+        PullRequestCommentDto comment,
+        IReadOnlyDictionary<long, PullRequestCommentDto> commentsById)
+    {
+        var visitedCommentIds = new HashSet<long>();
+        var currentComment = comment;
+        while (true)
+        {
+            if (currentComment.Inline is not null)
+            {
+                return currentComment.Inline;
+            }
+
+            var parentId = currentComment.Parent?.Id;
+            if (parentId is null || !commentsById.TryGetValue(parentId.Value, out currentComment))
+            {
+                return null;
+            }
+
+            if (!visitedCommentIds.Add(parentId.Value))
+            {
+                throw new BitbucketPullRequestCommentException(
+                    "La respuesta de Bitbucket contiene una relación circular entre comentarios.");
+            }
+        }
     }
 
     private static bool IsThreadResolved(
@@ -251,6 +468,13 @@ public sealed class BitbucketPullRequestCommentService : IBitbucketPullRequestCo
     private sealed record PullRequestCommentPage(
         IReadOnlyList<PullRequestCommentDto> Values,
         string? Next);
+
+    private sealed record CreateReplyRequestDto(
+        [property: JsonPropertyName("content")] ContentDto Content,
+        [property: JsonPropertyName("parent")] ParentDto Parent);
+
+    private sealed record CreateReplyResponseDto(
+        [property: JsonPropertyName("id")] long? Id);
 
     private sealed record PullRequestCommentDto(
         [property: JsonPropertyName("id")] long? Id,

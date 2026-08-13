@@ -33,6 +33,71 @@ public sealed class PullRequestUnifiedDiffBuilderTests
     }
 
     [Fact]
+    public void Build_WhenCommentContainsEmojiAndMarkdownImage_CreatesRenderableBlocks()
+    {
+        var comment = CreateComment(
+            id: 20,
+            fromLine: null,
+            toLine: 210,
+            content: """
+                :yellow_circle: Review this
+
+                ![diagram](https://bitbucket.org/team/repo/images/image.png){: data-layout='center' }
+
+                Done ✅
+                """);
+
+        var rows = PullRequestUnifiedDiffBuilder.Build(Diff, [comment]);
+
+        var row = Assert.Single(rows, item => item.CommentId == comment.Id);
+        Assert.Collection(
+            row.ContentBlocks,
+            text =>
+            {
+                Assert.Equal("Text", text.Kind);
+                Assert.Contains("🟡 Review this", text.Text);
+            },
+            image =>
+            {
+                Assert.Equal("Image", image.Kind);
+                Assert.Equal("https://bitbucket.org/team/repo/images/image.png", image.ImageUrl);
+                Assert.Equal("diagram", image.AlternativeText);
+            },
+            text =>
+            {
+                Assert.Equal("Text", text.Kind);
+                Assert.Contains("Done ✅", text.Text);
+                Assert.DoesNotContain("data-layout", text.Text);
+            });
+    }
+
+    [Fact]
+    public void Build_WhenCommentHasReplies_GroupsThemInsideTheRootCard()
+    {
+        var root = CreateComment(id: 30, fromLine: null, toLine: 210);
+        var reply = CreateComment(id: 31, fromLine: null, toLine: 210, parentId: root.Id);
+
+        var rows = PullRequestUnifiedDiffBuilder.Build(Diff, [root, reply]);
+
+        var commentRow = Assert.Single(rows, row => row.RowType == "Comment");
+        Assert.Equal(root.Id, commentRow.CommentId);
+        var nestedReply = Assert.Single(commentRow.Replies);
+        Assert.Equal(reply.Id, nestedReply.CommentId);
+        Assert.Equal("Respuesta al comentario #30", nestedReply.Thread);
+    }
+
+    [Fact]
+    public void CommentRow_RepliesContract_IsNotRecursiveForRemoteUi()
+    {
+        var repliesType = typeof(PullRequestDiffRow)
+            .GetProperty(nameof(PullRequestDiffRow.Replies))!
+            .PropertyType
+            .GetElementType();
+
+        Assert.NotEqual(typeof(PullRequestDiffRow), repliesType);
+    }
+
+    [Fact]
     public void Build_WhenCommentTargetsBeforeLine_InsertsItAfterRemovedRow()
     {
         var comment = CreateComment(id: 2, fromLine: 210, toLine: null);
@@ -183,11 +248,16 @@ public sealed class PullRequestUnifiedDiffBuilderTests
             $"-{before}",
             $"+{after}");
 
-    private static BitbucketPullRequestComment CreateComment(long id, int? fromLine, int? toLine) =>
+    private static BitbucketPullRequestComment CreateComment(
+        long id,
+        int? fromLine,
+        int? toLine,
+        string content = "Revisar esta línea",
+        long? parentId = null) =>
         new(
             id,
-            null,
-            "Revisar esta línea",
+            parentId,
+            content,
             "Hernan Flores",
             new DateTimeOffset(2026, 7, 31, 12, 24, 0, TimeSpan.Zero),
             null,

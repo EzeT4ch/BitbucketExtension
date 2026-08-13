@@ -3,6 +3,127 @@
               xmlns:styles="clr-namespace:Microsoft.VisualStudio.Shell;assembly=Microsoft.VisualStudio.Shell.15.0"
               xmlns:colors="clr-namespace:Microsoft.VisualStudio.PlatformUI;assembly=Microsoft.VisualStudio.Shell.15.0"
               xmlns:vs="http://schemas.microsoft.com/visualstudio/extensibility/2022/xaml">
+    <DataTemplate.Resources>
+        <DataTemplate x:Key="PullRequestCommentTemplate">
+            <Border Margin="0,0,0,10"
+                    Padding="12"
+                    BorderThickness="1"
+                    BorderBrush="{DynamicResource {x:Static styles:VsBrushes.ControlOutlineKey}}"
+                    Background="{DynamicResource {x:Static styles:VsBrushes.ToolWindowBackgroundKey}}"
+                    CornerRadius="4">
+                <StackPanel>
+                    <TextBlock FontSize="12"
+                               FontWeight="SemiBold"
+                               Opacity="0.82"
+                               TextWrapping="Wrap"
+                               Text="{Binding Location}" />
+
+                    <Grid Margin="0,9,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="28" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <Border Width="24"
+                                Height="24"
+                                BorderThickness="1"
+                                BorderBrush="{DynamicResource {x:Static styles:VsBrushes.ControlOutlineKey}}"
+                                Background="{DynamicResource {x:Static styles:VsBrushes.ControlOutlineKey}}"
+                                CornerRadius="12">
+                            <TextBlock HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       FontSize="10"
+                                       FontWeight="SemiBold"
+                                       Text="{Binding AuthorInitials}" />
+                        </Border>
+
+                        <StackPanel Grid.Column="1"
+                                    Margin="7,0,0,0">
+                            <TextBlock FontWeight="SemiBold"
+                                       TextWrapping="Wrap"
+                                       Text="{Binding Author}" />
+                            <TextBlock Margin="0,2,0,0"
+                                       FontSize="11"
+                                       Opacity="0.65"
+                                       Text="{Binding CreatedOn}" />
+                        </StackPanel>
+                    </Grid>
+
+                    <TextBlock Margin="35,10,0,0"
+                               FontSize="13"
+                               TextWrapping="Wrap"
+                               Text="{Binding Content}" />
+
+                    <WrapPanel Margin="35,10,0,0">
+                        <TextBlock FontWeight="SemiBold"
+                                   Text="{Binding State}" />
+                        <TextBlock Margin="12,0,0,0"
+                                   Opacity="0.65"
+                                   Text="{Binding Thread}" />
+                    </WrapPanel>
+
+                    <Button Margin="35,10,0,0"
+                            HorizontalAlignment="Left"
+                            Content="Responder"
+                            Command="{Binding OpenReplyCommand}">
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Setter Property="Visibility" Value="Visible" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding CanReply}" Value="False">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+
+                    <Border Margin="35,10,0,0"
+                            Padding="10"
+                            BorderThickness="1"
+                            BorderBrush="{DynamicResource {x:Static styles:VsBrushes.ControlOutlineKey}}"
+                            CornerRadius="3">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsReplyEditorOpen}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <StackPanel>
+                            <TextBlock FontWeight="SemiBold"
+                                       Text="Respuesta Markdown" />
+                            <TextBox MinHeight="82"
+                                     Margin="0,7,0,0"
+                                     Padding="7"
+                                     AcceptsReturn="True"
+                                     TextWrapping="Wrap"
+                                     VerticalScrollBarVisibility="Auto"
+                                     Text="{Binding ReplyContent, Mode=TwoWay}" />
+                            <TextBlock Margin="0,6,0,0"
+                                       Style="{DynamicResource Layout.StatusText}"
+                                       TextWrapping="Wrap"
+                                       Text="{Binding ReplyStatus}" />
+                            <WrapPanel Margin="0,8,0,0">
+                                <Button Content="Enviar"
+                                        Command="{Binding SendReplyCommand}"
+                                        CommandParameter="{Binding ReplyContent}"
+                                        IsEnabled="{Binding SendReplyCommand.RunningCommandsCount.IsZero}" />
+                                <Button Margin="8,0,0,0"
+                                        Content="Cancelar"
+                                        Command="{Binding CancelReplyCommand}"
+                                        IsEnabled="{Binding SendReplyCommand.RunningCommandsCount.IsZero}" />
+                            </WrapPanel>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+    </DataTemplate.Resources>
+
     <Grid Background="{DynamicResource {x:Static styles:VsBrushes.ToolWindowBackgroundKey}}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -418,6 +539,8 @@
                                                                    Text="{Binding Content}" />
                                                     </Border>
 
+                                                    <Grid x:Name="DiffCommentViewport"
+                                                          Width="{Binding RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type ScrollContentPresenter}}, Path=ActualWidth}">
                                                     <Border Margin="86,7,16,9"
                                                             Padding="12"
                                                             BorderThickness="1,1,1,1"
@@ -475,15 +598,276 @@
                                                                                FontSize="11"
                                                                                Opacity="0.7"
                                                                                Text="{Binding Location}" />
+                                                                    <TextBlock Margin="0,2,0,0"
+                                                                               HorizontalAlignment="Right"
+                                                                               FontSize="11"
+                                                                               Opacity="0.7"
+                                                                               Text="{Binding Thread}" />
                                                                 </StackPanel>
                                                             </Grid>
 
-                                                            <TextBlock Margin="35,10,0,0"
-                                                                       FontSize="13"
-                                                                       TextWrapping="Wrap"
-                                                                       Text="{Binding Content}" />
+                                                            <ItemsControl Margin="35,10,0,0"
+                                                                          ItemsSource="{Binding ContentBlocks}">
+                                                                <ItemsControl.ItemTemplate>
+                                                                    <DataTemplate>
+                                                                        <Grid Margin="0,0,0,6">
+                                                                            <TextBlock FontSize="13"
+                                                                                       TextWrapping="Wrap"
+                                                                                       Text="{Binding Text}">
+                                                                                <TextBlock.Style>
+                                                                                    <Style TargetType="TextBlock">
+                                                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                                                        <Style.Triggers>
+                                                                                            <DataTrigger Binding="{Binding Kind}" Value="Text">
+                                                                                                <Setter Property="Visibility" Value="Visible" />
+                                                                                            </DataTrigger>
+                                                                                        </Style.Triggers>
+                                                                                    </Style>
+                                                                                </TextBlock.Style>
+                                                                            </TextBlock>
+
+                                                                            <StackPanel>
+                                                                                <StackPanel.Style>
+                                                                                    <Style TargetType="StackPanel">
+                                                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                                                        <Style.Triggers>
+                                                                                            <DataTrigger Binding="{Binding Kind}" Value="Image">
+                                                                                                <Setter Property="Visibility" Value="Visible" />
+                                                                                            </DataTrigger>
+                                                                                        </Style.Triggers>
+                                                                                    </Style>
+                                                                                </StackPanel.Style>
+                                                                                <Border Padding="4"
+                                                                                        BorderThickness="1"
+                                                                                        BorderBrush="{DynamicResource {x:Static styles:VsBrushes.ControlOutlineKey}}">
+                                                                                    <Image MaxWidth="720"
+                                                                                           MaxHeight="420"
+                                                                                           HorizontalAlignment="Left"
+                                                                                           Stretch="Uniform"
+                                                                                           Source="{Binding ImageUrl}" />
+                                                                                </Border>
+                                                                                <TextBlock Margin="0,4,0,0"
+                                                                                           FontSize="11"
+                                                                                           Opacity="0.65"
+                                                                                           TextWrapping="Wrap"
+                                                                                           Text="{Binding AlternativeText}" />
+                                                                            </StackPanel>
+                                                                        </Grid>
+                                                                    </DataTemplate>
+                                                                </ItemsControl.ItemTemplate>
+                                                            </ItemsControl>
+
+                                                            <Button Margin="35,10,0,0"
+                                                                    HorizontalAlignment="Left"
+                                                                    Content="Responder"
+                                                                    Command="{Binding OpenReplyCommand}">
+                                                                <Button.Style>
+                                                                    <Style TargetType="Button">
+                                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding CanReply}" Value="True">
+                                                                                <Setter Property="Visibility" Value="Visible" />
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </Button.Style>
+                                                            </Button>
+
+                                                            <Border Margin="35,10,0,0"
+                                                                    Padding="10"
+                                                                    BorderThickness="1"
+                                                                    BorderBrush="{DynamicResource {x:Static styles:VsBrushes.ControlOutlineKey}}"
+                                                                    CornerRadius="3">
+                                                                <Border.Style>
+                                                                    <Style TargetType="Border">
+                                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding IsReplyEditorOpen}" Value="True">
+                                                                                <Setter Property="Visibility" Value="Visible" />
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </Border.Style>
+                                                                <StackPanel>
+                                                                    <TextBlock FontWeight="SemiBold"
+                                                                               Text="Respuesta Markdown" />
+                                                                    <TextBox MinHeight="82"
+                                                                             Margin="0,7,0,0"
+                                                                             Padding="7"
+                                                                             AcceptsReturn="True"
+                                                                             TextWrapping="Wrap"
+                                                                             VerticalScrollBarVisibility="Auto"
+                                                                             Text="{Binding ReplyContent, Mode=TwoWay}" />
+                                                                    <TextBlock Margin="0,6,0,0"
+                                                                               Style="{DynamicResource Layout.StatusText}"
+                                                                               TextWrapping="Wrap"
+                                                                               Text="{Binding ReplyStatus}" />
+                                                                    <WrapPanel Margin="0,8,0,0">
+                                                                        <Button Content="Enviar"
+                                                                                Command="{Binding SendReplyCommand}"
+                                                                                CommandParameter="{Binding ReplyContent}"
+                                                                                IsEnabled="{Binding SendReplyCommand.RunningCommandsCount.IsZero}" />
+                                                                        <Button Margin="8,0,0,0"
+                                                                                Content="Cancelar"
+                                                                                Command="{Binding CancelReplyCommand}"
+                                                                                IsEnabled="{Binding SendReplyCommand.RunningCommandsCount.IsZero}" />
+                                                                    </WrapPanel>
+                                                                </StackPanel>
+                                                            </Border>
+
+                                                            <ItemsControl Margin="35,12,0,0"
+                                                                          ItemsSource="{Binding Replies}">
+                                                                <ItemsControl.ItemTemplate>
+                                                                    <DataTemplate>
+                                                                        <Border Padding="0,12,0,0"
+                                                                                BorderThickness="0,1,0,0"
+                                                                                BorderBrush="{DynamicResource {x:Static styles:VsBrushes.ControlOutlineKey}}">
+                                                                            <StackPanel>
+                                                                                <Grid>
+                                                                                    <Grid.ColumnDefinitions>
+                                                                                        <ColumnDefinition Width="28" />
+                                                                                        <ColumnDefinition Width="*" />
+                                                                                    </Grid.ColumnDefinitions>
+
+                                                                                    <Border Width="24"
+                                                                                            Height="24"
+                                                                                            BorderThickness="1"
+                                                                                            BorderBrush="{DynamicResource {x:Static colors:EnvironmentColors.AccentMediumBrushKey}}"
+                                                                                            Background="{DynamicResource {x:Static colors:EnvironmentColors.AccentPaleBrushKey}}"
+                                                                                            CornerRadius="12">
+                                                                                        <TextBlock HorizontalAlignment="Center"
+                                                                                                   VerticalAlignment="Center"
+                                                                                                   FontSize="10"
+                                                                                                   FontWeight="SemiBold"
+                                                                                                   Text="{Binding AuthorInitials}" />
+                                                                                    </Border>
+
+                                                                                    <StackPanel Grid.Column="1" Margin="7,0,0,0">
+                                                                                        <TextBlock FontWeight="SemiBold"
+                                                                                                   Text="{Binding Author}" />
+                                                                                        <TextBlock Margin="0,2,0,0"
+                                                                                                   FontSize="11"
+                                                                                                   Opacity="0.65"
+                                                                                                   Text="{Binding CreatedOn}" />
+                                                                                    </StackPanel>
+                                                                                </Grid>
+
+                                                                                <ItemsControl Margin="35,9,0,0"
+                                                                                              ItemsSource="{Binding ContentBlocks}">
+                                                                                    <ItemsControl.ItemTemplate>
+                                                                                        <DataTemplate>
+                                                                                            <Grid Margin="0,0,0,6">
+                                                                                                <TextBlock FontSize="13"
+                                                                                                           TextWrapping="Wrap"
+                                                                                                           Text="{Binding Text}">
+                                                                                                    <TextBlock.Style>
+                                                                                                        <Style TargetType="TextBlock">
+                                                                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                                                                            <Style.Triggers>
+                                                                                                                <DataTrigger Binding="{Binding Kind}" Value="Text">
+                                                                                                                    <Setter Property="Visibility" Value="Visible" />
+                                                                                                                </DataTrigger>
+                                                                                                            </Style.Triggers>
+                                                                                                        </Style>
+                                                                                                    </TextBlock.Style>
+                                                                                                </TextBlock>
+
+                                                                                                <StackPanel>
+                                                                                                    <StackPanel.Style>
+                                                                                                        <Style TargetType="StackPanel">
+                                                                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                                                                            <Style.Triggers>
+                                                                                                                <DataTrigger Binding="{Binding Kind}" Value="Image">
+                                                                                                                    <Setter Property="Visibility" Value="Visible" />
+                                                                                                                </DataTrigger>
+                                                                                                            </Style.Triggers>
+                                                                                                        </Style>
+                                                                                                    </StackPanel.Style>
+                                                                                                    <Border Padding="4"
+                                                                                                            BorderThickness="1"
+                                                                                                            BorderBrush="{DynamicResource {x:Static styles:VsBrushes.ControlOutlineKey}}">
+                                                                                                        <Image MaxWidth="680"
+                                                                                                               MaxHeight="380"
+                                                                                                               HorizontalAlignment="Left"
+                                                                                                               Stretch="Uniform"
+                                                                                                               Source="{Binding ImageUrl}" />
+                                                                                                    </Border>
+                                                                                                    <TextBlock Margin="0,4,0,0"
+                                                                                                               FontSize="11"
+                                                                                                               Opacity="0.65"
+                                                                                                               TextWrapping="Wrap"
+                                                                                                               Text="{Binding AlternativeText}" />
+                                                                                                </StackPanel>
+                                                                                            </Grid>
+                                                                                        </DataTemplate>
+                                                                                    </ItemsControl.ItemTemplate>
+                                                                                </ItemsControl>
+
+                                                                                <Button Margin="35,7,0,0"
+                                                                                        HorizontalAlignment="Left"
+                                                                                        Content="Responder"
+                                                                                        Command="{Binding OpenReplyCommand}">
+                                                                                    <Button.Style>
+                                                                                        <Style TargetType="Button">
+                                                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                                                            <Style.Triggers>
+                                                                                                <DataTrigger Binding="{Binding CanReply}" Value="True">
+                                                                                                    <Setter Property="Visibility" Value="Visible" />
+                                                                                                </DataTrigger>
+                                                                                            </Style.Triggers>
+                                                                                        </Style>
+                                                                                    </Button.Style>
+                                                                                </Button>
+
+                                                                                <Border Margin="35,8,0,0"
+                                                                                        Padding="10"
+                                                                                        BorderThickness="1"
+                                                                                        BorderBrush="{DynamicResource {x:Static styles:VsBrushes.ControlOutlineKey}}"
+                                                                                        CornerRadius="3">
+                                                                                    <Border.Style>
+                                                                                        <Style TargetType="Border">
+                                                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                                                            <Style.Triggers>
+                                                                                                <DataTrigger Binding="{Binding IsReplyEditorOpen}" Value="True">
+                                                                                                    <Setter Property="Visibility" Value="Visible" />
+                                                                                                </DataTrigger>
+                                                                                            </Style.Triggers>
+                                                                                        </Style>
+                                                                                    </Border.Style>
+                                                                                    <StackPanel>
+                                                                                        <TextBlock FontWeight="SemiBold"
+                                                                                                   Text="Respuesta Markdown" />
+                                                                                        <TextBox MinHeight="82"
+                                                                                                 Margin="0,7,0,0"
+                                                                                                 Padding="7"
+                                                                                                 AcceptsReturn="True"
+                                                                                                 TextWrapping="Wrap"
+                                                                                                 VerticalScrollBarVisibility="Auto"
+                                                                                                 Text="{Binding ReplyContent, Mode=TwoWay}" />
+                                                                                        <TextBlock Margin="0,6,0,0"
+                                                                                                   Style="{DynamicResource Layout.StatusText}"
+                                                                                                   TextWrapping="Wrap"
+                                                                                                   Text="{Binding ReplyStatus}" />
+                                                                                        <WrapPanel Margin="0,8,0,0">
+                                                                                            <Button Content="Enviar"
+                                                                                                    Command="{Binding SendReplyCommand}"
+                                                                                                    CommandParameter="{Binding ReplyContent}"
+                                                                                                    IsEnabled="{Binding SendReplyCommand.RunningCommandsCount.IsZero}" />
+                                                                                            <Button Margin="8,0,0,0"
+                                                                                                    Content="Cancelar"
+                                                                                                    Command="{Binding CancelReplyCommand}"
+                                                                                                    IsEnabled="{Binding SendReplyCommand.RunningCommandsCount.IsZero}" />
+                                                                                        </WrapPanel>
+                                                                                    </StackPanel>
+                                                                                </Border>
+                                                                            </StackPanel>
+                                                                        </Border>
+                                                                    </DataTemplate>
+                                                                </ItemsControl.ItemTemplate>
+                                                            </ItemsControl>
                                                         </StackPanel>
                                                     </Border>
+                                                    </Grid>
                                                 </Grid>
                                             </DataTemplate>
                                         </ListBox.ItemTemplate>
@@ -563,69 +947,8 @@
                                              HorizontalContentAlignment="Stretch"
                                              ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                                              ScrollViewer.VerticalScrollBarVisibility="Auto"
-                                             ItemsSource="{Binding PullRequestBrowser.Comments.Unresolved}">
-                                        <ListBox.ItemTemplate>
-                                            <DataTemplate>
-                                                <Border Margin="0,0,0,10"
-                                                        Padding="12"
-                                                        BorderThickness="1"
-                                                        BorderBrush="{DynamicResource {x:Static styles:VsBrushes.ControlOutlineKey}}"
-                                                        Background="{DynamicResource {x:Static styles:VsBrushes.ToolWindowBackgroundKey}}"
-                                                        CornerRadius="4">
-                                                    <StackPanel>
-                                                        <TextBlock FontSize="12"
-                                                                   FontWeight="SemiBold"
-                                                                   Opacity="0.82"
-                                                                   TextWrapping="Wrap"
-                                                                   Text="{Binding Location}" />
-
-                                                        <Grid Margin="0,9,0,0">
-                                                            <Grid.ColumnDefinitions>
-                                                                <ColumnDefinition Width="28" />
-                                                                <ColumnDefinition Width="*" />
-                                                            </Grid.ColumnDefinitions>
-
-                                                            <Border Width="24"
-                                                                    Height="24"
-                                                                    BorderThickness="1"
-                                                                    BorderBrush="{DynamicResource {x:Static styles:VsBrushes.ControlOutlineKey}}"
-                                                                    Background="{DynamicResource {x:Static styles:VsBrushes.ControlOutlineKey}}"
-                                                                    CornerRadius="12">
-                                                                <TextBlock HorizontalAlignment="Center"
-                                                                           VerticalAlignment="Center"
-                                                                           FontSize="10"
-                                                                           FontWeight="SemiBold"
-                                                                           Text="{Binding AuthorInitials}" />
-                                                            </Border>
-
-                                                            <StackPanel Grid.Column="1"
-                                                                        Margin="7,0,0,0">
-                                                                <TextBlock FontWeight="SemiBold"
-                                                                           TextWrapping="Wrap"
-                                                                           Text="{Binding Author}" />
-                                                                <TextBlock Margin="0,2,0,0"
-                                                                           FontSize="11"
-                                                                           Opacity="0.65"
-                                                                           Text="{Binding CreatedOn}" />
-                                                            </StackPanel>
-                                                        </Grid>
-
-                                                        <TextBlock Margin="35,10,0,0"
-                                                                   FontSize="13"
-                                                                   TextWrapping="Wrap"
-                                                                   Text="{Binding Content}" />
-
-                                                        <WrapPanel Margin="35,10,0,0">
-                                                            <TextBlock FontWeight="SemiBold"
-                                                                       Text="{Binding State}" />
-                                                            <TextBlock Margin="12,0,0,0"
-                                                                       Opacity="0.65"
-                                                                       Text="{Binding Thread}" />
-                                                        </WrapPanel>
-                                                    </StackPanel>
-                                                </Border>
-                                            </DataTemplate>
-                                        </ListBox.ItemTemplate>
+                                             ItemsSource="{Binding PullRequestBrowser.Comments.Unresolved}"
+                                             ItemTemplate="{StaticResource PullRequestCommentTemplate}">
                                     </ListBox>
 
                                     <Expander Grid.Row="3"
@@ -640,69 +963,8 @@
                                                  HorizontalContentAlignment="Stretch"
                                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                                                  ScrollViewer.VerticalScrollBarVisibility="Auto"
-                                                 ItemsSource="{Binding PullRequestBrowser.Comments.All}">
-                                            <ListBox.ItemTemplate>
-                                                <DataTemplate>
-                                                    <Border Margin="0,0,0,10"
-                                                            Padding="12"
-                                                            BorderThickness="1"
-                                                            BorderBrush="{DynamicResource {x:Static styles:VsBrushes.ControlOutlineKey}}"
-                                                            Background="{DynamicResource {x:Static styles:VsBrushes.ToolWindowBackgroundKey}}"
-                                                            CornerRadius="4">
-                                                        <StackPanel>
-                                                            <TextBlock FontSize="12"
-                                                                       FontWeight="SemiBold"
-                                                                       Opacity="0.82"
-                                                                       TextWrapping="Wrap"
-                                                                       Text="{Binding Location}" />
-
-                                                            <Grid Margin="0,9,0,0">
-                                                                <Grid.ColumnDefinitions>
-                                                                    <ColumnDefinition Width="28" />
-                                                                    <ColumnDefinition Width="*" />
-                                                                </Grid.ColumnDefinitions>
-
-                                                                <Border Width="24"
-                                                                        Height="24"
-                                                                        BorderThickness="1"
-                                                                        BorderBrush="{DynamicResource {x:Static styles:VsBrushes.ControlOutlineKey}}"
-                                                                        Background="{DynamicResource {x:Static styles:VsBrushes.ControlOutlineKey}}"
-                                                                        CornerRadius="12">
-                                                                    <TextBlock HorizontalAlignment="Center"
-                                                                               VerticalAlignment="Center"
-                                                                               FontSize="10"
-                                                                               FontWeight="SemiBold"
-                                                                               Text="{Binding AuthorInitials}" />
-                                                                </Border>
-
-                                                                <StackPanel Grid.Column="1"
-                                                                            Margin="7,0,0,0">
-                                                                    <TextBlock FontWeight="SemiBold"
-                                                                               TextWrapping="Wrap"
-                                                                               Text="{Binding Author}" />
-                                                                    <TextBlock Margin="0,2,0,0"
-                                                                               FontSize="11"
-                                                                               Opacity="0.65"
-                                                                               Text="{Binding CreatedOn}" />
-                                                                </StackPanel>
-                                                            </Grid>
-
-                                                            <TextBlock Margin="35,10,0,0"
-                                                                       FontSize="13"
-                                                                       TextWrapping="Wrap"
-                                                                       Text="{Binding Content}" />
-
-                                                            <WrapPanel Margin="35,10,0,0">
-                                                                <TextBlock FontWeight="SemiBold"
-                                                                           Text="{Binding State}" />
-                                                                <TextBlock Margin="12,0,0,0"
-                                                                           Opacity="0.65"
-                                                                           Text="{Binding Thread}" />
-                                                            </WrapPanel>
-                                                        </StackPanel>
-                                                    </Border>
-                                                </DataTemplate>
-                                            </ListBox.ItemTemplate>
+                                                 ItemsSource="{Binding PullRequestBrowser.Comments.All}"
+                                                 ItemTemplate="{StaticResource PullRequestCommentTemplate}">
                                         </ListBox>
                                     </Expander>
                                 </Grid>

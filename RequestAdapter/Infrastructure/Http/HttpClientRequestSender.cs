@@ -30,7 +30,10 @@ public sealed class HttpClientRequestSender : IHttpRequestSender
                 HttpCompletionOption.ResponseHeadersRead,
                 effectiveToken);
 
-            return await ResponseMessageMapper.ToResponseMessageAsync(httpResponseMessage, cancellationToken);
+            return await ResponseMessageMapper.ToResponseMessageAsync(
+                httpResponseMessage,
+                request.ResponseBodyMode,
+                cancellationToken);
         }
         catch (HttpRequestException exception)
         {

@@ -1,7 +1,9 @@
 using System.Globalization;
+using System.Net;
 using System.Runtime.Serialization;
 using System.Text.RegularExpressions;
 using BitbucketAdapter.Domain.PullRequests;
+using Microsoft.VisualStudio.Extensibility.UI;
 
 namespace ClientExtension.Presentation.Bitbucket.PullRequests;
 
@@ -21,14 +23,15 @@ internal static partial class PullRequestUnifiedDiffBuilder
             return diffRows;
         }
 
-        var commentsByRow = new Dictionary<int, List<BitbucketPullRequestComment>>();
-        var unanchoredComments = new List<BitbucketPullRequestComment>();
-        foreach (var comment in comments)
+        var threads = GroupCommentThreads(comments);
+        var commentsByRow = new Dictionary<int, List<CommentThread>>();
+        var unanchoredComments = new List<CommentThread>();
+        foreach (var thread in threads)
         {
-            var rowIndex = FindAnchorRow(diffRows, comment);
+            var rowIndex = FindAnchorRow(diffRows, thread.Root);
             if (rowIndex < 0)
             {
-                unanchoredComments.Add(comment);
+                unanchoredComments.Add(thread);
                 continue;
             }
 
@@ -38,7 +41,7 @@ internal static partial class PullRequestUnifiedDiffBuilder
                 commentsByRow.Add(rowIndex, rowComments);
             }
 
-            rowComments.Add(comment);
+            rowComments.Add(thread);
         }
 
         var result = new List<PullRequestDiffRow>(diffRows.Count + comments.Count);
@@ -50,13 +53,13 @@ internal static partial class PullRequestUnifiedDiffBuilder
                 continue;
             }
 
-            result.AddRange(rowComments.Select(comment => PullRequestDiffRow.CreateComment(comment, false)));
+            result.AddRange(rowComments.Select(thread => CreateCommentRow(thread, false)));
         }
 
         if (unanchoredComments.Count > 0)
         {
             result.Add(PullRequestDiffRow.CreateMeta("Comentarios fuera del fragmento mostrado"));
-            result.AddRange(unanchoredComments.Select(comment => PullRequestDiffRow.CreateComment(comment, true)));
+            result.AddRange(unanchoredComments.Select(thread => CreateCommentRow(thread, true)));
         }
 
         return result;
@@ -108,14 +111,15 @@ internal static partial class PullRequestUnifiedDiffBuilder
             return splitRows;
         }
 
-        var commentsByRow = new Dictionary<int, List<(BitbucketPullRequestComment Comment, string Side)>>();
-        var unanchoredComments = new List<BitbucketPullRequestComment>();
-        foreach (var comment in comments)
+        var threads = GroupCommentThreads(comments);
+        var commentsByRow = new Dictionary<int, List<(CommentThread Thread, string Side)>>();
+        var unanchoredComments = new List<CommentThread>();
+        foreach (var thread in threads)
         {
-            var anchor = FindSplitAnchor(splitRows, comment);
+            var anchor = FindSplitAnchor(splitRows, thread.Root);
             if (anchor.RowIndex < 0)
             {
-                unanchoredComments.Add(comment);
+                unanchoredComments.Add(thread);
                 continue;
             }
 
@@ -125,7 +129,7 @@ internal static partial class PullRequestUnifiedDiffBuilder
                 commentsByRow.Add(anchor.RowIndex, rowComments);
             }
 
-            rowComments.Add((comment, anchor.Side));
+            rowComments.Add((thread, anchor.Side));
         }
 
         var result = new List<PullRequestSplitDiffRow>(splitRows.Count + comments.Count);
@@ -138,20 +142,78 @@ internal static partial class PullRequestUnifiedDiffBuilder
             }
 
             result.AddRange(rowComments.Select(item =>
-                PullRequestSplitDiffRow.CreateComment(item.Comment, item.Side, false)));
+                PullRequestSplitDiffRow.CreateComment(CreateCommentRow(item.Thread, false), item.Side)));
         }
 
         if (unanchoredComments.Count > 0)
         {
             result.Add(PullRequestSplitDiffRow.CreateMeta("Comentarios fuera del fragmento mostrado"));
-            result.AddRange(unanchoredComments.Select(comment => PullRequestSplitDiffRow.CreateComment(
-                comment,
-                comment.ToLine is not null ? "Right" : "Left",
-                true)));
+            result.AddRange(unanchoredComments.Select(thread => PullRequestSplitDiffRow.CreateComment(
+                CreateCommentRow(thread, true),
+                thread.Root.ToLine is not null ? "Right" : "Left")));
         }
 
         return result;
     }
+
+    private static IReadOnlyList<CommentThread> GroupCommentThreads(
+        IReadOnlyList<BitbucketPullRequestComment> comments)
+    {
+        var commentsById = comments
+            .GroupBy(comment => comment.Id)
+            .ToDictionary(group => group.Key, group => group.First());
+        var groupedReplies = new Dictionary<long, List<BitbucketPullRequestComment>>();
+        var roots = new List<BitbucketPullRequestComment>();
+
+        foreach (var comment in commentsById.Values.OrderBy(comment => comment.CreatedOn).ThenBy(comment => comment.Id))
+        {
+            var root = FindThreadRoot(comment, commentsById);
+            if (root.Id == comment.Id)
+            {
+                roots.Add(comment);
+                continue;
+            }
+
+            if (!groupedReplies.TryGetValue(root.Id, out var replies))
+            {
+                replies = [];
+                groupedReplies.Add(root.Id, replies);
+            }
+
+            replies.Add(comment);
+        }
+
+        return roots
+            .Select(root => new CommentThread(
+                root,
+                groupedReplies.TryGetValue(root.Id, out var replies) ? replies : []))
+            .ToArray();
+    }
+
+    private static BitbucketPullRequestComment FindThreadRoot(
+        BitbucketPullRequestComment comment,
+        IReadOnlyDictionary<long, BitbucketPullRequestComment> commentsById)
+    {
+        var current = comment;
+        var visited = new HashSet<long>();
+        while (current.ParentId is long parentId &&
+               visited.Add(current.Id) &&
+               commentsById.TryGetValue(parentId, out var parent))
+        {
+            current = parent;
+        }
+
+        return current.ParentId is not null && !visited.Add(current.Id)
+            ? comment
+            : current;
+    }
+
+    private sealed record CommentThread(
+        BitbucketPullRequestComment Root,
+        IReadOnlyList<BitbucketPullRequestComment> Replies);
+
+    private static PullRequestDiffRow CreateCommentRow(CommentThread thread, bool isUnanchored) =>
+        PullRequestDiffRow.CreateComment(thread.Root, isUnanchored, thread.Replies);
 
     private static List<PullRequestSplitDiffRow> PairRows(IReadOnlyList<PullRequestDiffRow> rows)
     {
@@ -392,15 +454,59 @@ internal sealed class PullRequestSplitDiffRow
         new("Meta", content);
 
     internal static PullRequestSplitDiffRow CreateComment(
-        BitbucketPullRequestComment comment,
-        string side,
-        bool isUnanchored) =>
-        new("Comment", string.Empty, comment: PullRequestDiffRow.CreateComment(comment, isUnanchored), commentSide: side);
+        PullRequestDiffRow comment,
+        string side) =>
+        new("Comment", string.Empty, comment: comment, commentSide: side);
+}
+
+internal interface IPullRequestReplyTarget
+{
+    long? CommentId { get; }
+
+    bool CanReply { get; }
+
+    string ReplyContent { get; }
+
+    void OpenReplyEditor();
+
+    void CloseReplyEditor(bool clearDraft);
+
+    void SetReplyStatus(string status);
 }
 
 [DataContract]
-internal sealed class PullRequestDiffRow
+internal sealed class PullRequestDiffRow : NotifyPropertyChangedObject, IPullRequestReplyTarget
 {
+    private static readonly Regex MarkdownImageRegex = new(
+        @"!\[(?<alt>[^\]]*)\]\((?<url>https://[^)\s]+)\)(?:\{:[^}]*\})?",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly IReadOnlyDictionary<string, string> EmojiShortcodes =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            [":yellow_circle:"] = "🟡",
+            [":blue_circle:"] = "🔵",
+            [":red_circle:"] = "🔴",
+            [":green_circle:"] = "🟢",
+            [":orange_circle:"] = "🟠",
+            [":purple_circle:"] = "🟣",
+            [":white_circle:"] = "⚪",
+            [":black_circle:"] = "⚫",
+            [":white_check_mark:"] = "✅",
+            [":warning:"] = "⚠️",
+            [":x:"] = "❌",
+            [":thumbsup:"] = "👍",
+            [":rocket:"] = "🚀",
+            [":eyes:"] = "👀",
+        };
+
+    private Action<IPullRequestReplyTarget>? _openReply;
+    private Action<IPullRequestReplyTarget>? _cancelReply;
+    private Func<IPullRequestReplyTarget, string, CancellationToken, Task>? _sendReplyAsync;
+    private string _replyContent = string.Empty;
+    private string _replyStatus = string.Empty;
+    private bool _isReplyEditorOpen;
+    private bool _canReply;
+
     private PullRequestDiffRow(
         string rowType,
         string changeType,
@@ -414,7 +520,9 @@ internal sealed class PullRequestDiffRow
         string authorInitials = "",
         string createdOn = "",
         string state = "",
-        string location = "")
+        string location = "",
+        string thread = "",
+        IReadOnlyList<PullRequestDiffReply>? replies = null)
     {
         RowType = rowType;
         ChangeType = changeType;
@@ -426,7 +534,8 @@ internal sealed class PullRequestDiffRow
         CommentToLine = afterLine;
         CanComment = rowType == "Code" && (CommentFromLine is not null || CommentToLine is not null);
         Marker = marker;
-        Content = content;
+        Content = rowType == "Comment" ? FormatContent(content) : content;
+        ContentBlocks = rowType == "Comment" ? BuildContentBlocks(content) : [];
         Tokens = tokens?.ToArray() ?? [];
         CommentId = commentId;
         Author = author;
@@ -434,6 +543,8 @@ internal sealed class PullRequestDiffRow
         CreatedOn = createdOn;
         State = state;
         Location = location;
+        Thread = thread;
+        Replies = replies?.ToArray() ?? [];
     }
 
     [DataMember]
@@ -468,6 +579,9 @@ internal sealed class PullRequestDiffRow
     public string Content { get; }
 
     [DataMember]
+    public PullRequestCommentContentBlock[] ContentBlocks { get; }
+
+    [DataMember]
     public PullRequestDiffToken[] Tokens { get; }
 
     [DataMember]
@@ -487,6 +601,115 @@ internal sealed class PullRequestDiffRow
 
     [DataMember]
     public string Location { get; }
+
+    [DataMember]
+    public string Thread { get; }
+
+    [DataMember]
+    public PullRequestDiffReply[] Replies { get; }
+
+    [DataMember]
+    public bool CanReply
+    {
+        get => _canReply;
+        private set => SetProperty(ref _canReply, value);
+    }
+
+    [DataMember]
+    public string ReplyContent
+    {
+        get => _replyContent;
+        set
+        {
+            if (SetProperty(ref _replyContent, value) && SendReplyCommand is not null)
+            {
+                SendReplyCommand.CanExecute = CanReply && !string.IsNullOrWhiteSpace(value);
+            }
+        }
+    }
+
+    [DataMember]
+    public string ReplyStatus
+    {
+        get => _replyStatus;
+        private set => SetProperty(ref _replyStatus, value);
+    }
+
+    [DataMember]
+    public bool IsReplyEditorOpen
+    {
+        get => _isReplyEditorOpen;
+        private set => SetProperty(ref _isReplyEditorOpen, value);
+    }
+
+    [DataMember]
+    public AsyncCommand? OpenReplyCommand { get; private set; }
+
+    [DataMember]
+    public AsyncCommand? CancelReplyCommand { get; private set; }
+
+    [DataMember]
+    public AsyncCommand? SendReplyCommand { get; private set; }
+
+    internal void ConfigureReply(
+        Action<IPullRequestReplyTarget> openReply,
+        Action<IPullRequestReplyTarget> cancelReply,
+        Func<IPullRequestReplyTarget, string, CancellationToken, Task> sendReplyAsync)
+    {
+        if (CommentId is null or <= 0)
+        {
+            return;
+        }
+
+        _openReply = openReply;
+        _cancelReply = cancelReply;
+        _sendReplyAsync = sendReplyAsync;
+        OpenReplyCommand ??= new AsyncCommand((_, _) =>
+        {
+            _openReply?.Invoke(this);
+            return Task.CompletedTask;
+        });
+        CancelReplyCommand ??= new AsyncCommand((_, _) =>
+        {
+            _cancelReply?.Invoke(this);
+            return Task.CompletedTask;
+        });
+        SendReplyCommand ??= new AsyncCommand((parameter, cancellationToken) =>
+            _sendReplyAsync?.Invoke(
+                this,
+                parameter as string ?? string.Empty,
+                cancellationToken) ?? Task.CompletedTask);
+        CanReply = true;
+        OpenReplyCommand.CanExecute = true;
+        SendReplyCommand.CanExecute = !string.IsNullOrWhiteSpace(ReplyContent);
+    }
+
+    internal void OpenReplyEditor()
+    {
+        ReplyStatus = string.Empty;
+        IsReplyEditorOpen = true;
+    }
+
+    internal void CloseReplyEditor(bool clearDraft)
+    {
+        IsReplyEditorOpen = false;
+        ReplyStatus = string.Empty;
+        if (clearDraft)
+        {
+            ReplyContent = string.Empty;
+        }
+    }
+
+    internal void SetReplyStatus(string status)
+    {
+        ReplyStatus = status;
+    }
+
+    void IPullRequestReplyTarget.OpenReplyEditor() => OpenReplyEditor();
+
+    void IPullRequestReplyTarget.CloseReplyEditor(bool clearDraft) => CloseReplyEditor(clearDraft);
+
+    void IPullRequestReplyTarget.SetReplyStatus(string status) => SetReplyStatus(status);
 
     internal static PullRequestDiffRow CreateCode(
         int? beforeLine,
@@ -512,7 +735,8 @@ internal sealed class PullRequestDiffRow
 
     internal static PullRequestDiffRow CreateComment(
         BitbucketPullRequestComment comment,
-        bool isUnanchored)
+        bool isUnanchored,
+        IReadOnlyList<BitbucketPullRequestComment>? replies = null)
     {
         var line = comment.ToLine ?? comment.FromLine;
         var location = line is null
@@ -521,27 +745,33 @@ internal sealed class PullRequestDiffRow
                 ? $"Línea {line.Value} · fuera del fragmento mostrado"
                 : $"Línea {line.Value}";
 
+        var replyRows = replies?
+            .Select(PullRequestDiffReply.Create)
+            .ToArray() ?? [];
+
         return new PullRequestDiffRow(
             "Comment",
             string.Empty,
             null,
             null,
             string.Empty,
-            FormatContent(comment.Content),
+            comment.Content,
             null,
             comment.Id,
             comment.AuthorDisplayName,
             BuildInitials(comment.AuthorDisplayName),
             comment.CreatedOn?.ToLocalTime().ToString("dd/MM/yyyy HH:mm", CultureInfo.CurrentCulture)
                 ?? "sin fecha",
-            "Sin resolver",
-            location);
+            comment.ParentId is null ? "Sin resolver" : "Respuesta",
+            location,
+            comment.ParentId is null ? string.Empty : $"Respuesta al comentario #{comment.ParentId.Value}",
+            replyRows);
     }
 
     private static string FormatLineNumber(int? lineNumber) =>
         lineNumber?.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
 
-    private static string BuildInitials(string author)
+    internal static string BuildInitials(string author)
     {
         var names = author.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         return names.Length == 0
@@ -549,6 +779,253 @@ internal sealed class PullRequestDiffRow
             : string.Concat(names.Take(2).Select(name => char.ToUpperInvariant(name[0])));
     }
 
-    private static string FormatContent(string content) =>
-        content.Replace(":blue_circle:", "●", StringComparison.OrdinalIgnoreCase);
+    internal static PullRequestCommentContentBlock[] BuildContentBlocks(string content)
+    {
+        var blocks = new List<PullRequestCommentContentBlock>();
+        var contentIndex = 0;
+        foreach (Match match in MarkdownImageRegex.Matches(content))
+        {
+            AddTextBlock(blocks, content[contentIndex..match.Index]);
+            var imageUrl = match.Groups["url"].Value;
+            if (Uri.TryCreate(imageUrl, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps)
+            {
+                blocks.Add(PullRequestCommentContentBlock.CreateImage(
+                    uri.AbsoluteUri,
+                    match.Groups["alt"].Value));
+            }
+            else
+            {
+                AddTextBlock(blocks, match.Value);
+            }
+
+            contentIndex = match.Index + match.Length;
+        }
+
+        AddTextBlock(blocks, content[contentIndex..]);
+        return blocks.Count == 0
+            ? [PullRequestCommentContentBlock.CreateText(string.Empty)]
+            : blocks.ToArray();
+    }
+
+    private static void AddTextBlock(
+        ICollection<PullRequestCommentContentBlock> blocks,
+        string content)
+    {
+        var text = FormatContent(content).Trim('\r', '\n');
+        if (!string.IsNullOrWhiteSpace(text))
+        {
+            blocks.Add(PullRequestCommentContentBlock.CreateText(text));
+        }
+    }
+
+    internal static string FormatContent(string content)
+    {
+        var formattedContent = WebUtility.HtmlDecode(content);
+        foreach (var shortcode in EmojiShortcodes)
+        {
+            formattedContent = formattedContent.Replace(
+                shortcode.Key,
+                shortcode.Value,
+                StringComparison.OrdinalIgnoreCase);
+        }
+
+        return formattedContent;
+    }
+}
+
+[DataContract]
+internal sealed class PullRequestDiffReply : NotifyPropertyChangedObject, IPullRequestReplyTarget
+{
+    private Action<IPullRequestReplyTarget>? _openReply;
+    private Action<IPullRequestReplyTarget>? _cancelReply;
+    private Func<IPullRequestReplyTarget, string, CancellationToken, Task>? _sendReplyAsync;
+    private string _replyContent = string.Empty;
+    private string _replyStatus = string.Empty;
+    private bool _isReplyEditorOpen;
+    private bool _canReply;
+
+    private PullRequestDiffReply(BitbucketPullRequestComment comment)
+    {
+        CommentId = comment.Id;
+        Author = comment.AuthorDisplayName;
+        AuthorInitials = PullRequestDiffRow.BuildInitials(comment.AuthorDisplayName);
+        CreatedOn = comment.CreatedOn?.ToLocalTime().ToString("dd/MM/yyyy HH:mm", CultureInfo.CurrentCulture)
+            ?? "sin fecha";
+        ContentBlocks = PullRequestDiffRow.BuildContentBlocks(comment.Content);
+        Thread = comment.ParentId is null ? string.Empty : $"Respuesta al comentario #{comment.ParentId.Value}";
+    }
+
+    [DataMember]
+    public long? CommentId { get; }
+
+    [DataMember]
+    public string Author { get; }
+
+    [DataMember]
+    public string AuthorInitials { get; }
+
+    [DataMember]
+    public string CreatedOn { get; }
+
+    [DataMember]
+    public PullRequestCommentContentBlock[] ContentBlocks { get; }
+
+    [DataMember]
+    public string Thread { get; }
+
+    [DataMember]
+    public string State { get; } = "Respuesta";
+
+    [DataMember]
+    public bool CanReply
+    {
+        get => _canReply;
+        private set => SetProperty(ref _canReply, value);
+    }
+
+    [DataMember]
+    public string ReplyContent
+    {
+        get => _replyContent;
+        set
+        {
+            if (SetProperty(ref _replyContent, value) && SendReplyCommand is not null)
+            {
+                SendReplyCommand.CanExecute = CanReply && !string.IsNullOrWhiteSpace(value);
+            }
+        }
+    }
+
+    [DataMember]
+    public string ReplyStatus
+    {
+        get => _replyStatus;
+        private set => SetProperty(ref _replyStatus, value);
+    }
+
+    [DataMember]
+    public bool IsReplyEditorOpen
+    {
+        get => _isReplyEditorOpen;
+        private set => SetProperty(ref _isReplyEditorOpen, value);
+    }
+
+    [DataMember]
+    public AsyncCommand? OpenReplyCommand { get; private set; }
+
+    [DataMember]
+    public AsyncCommand? CancelReplyCommand { get; private set; }
+
+    [DataMember]
+    public AsyncCommand? SendReplyCommand { get; private set; }
+
+    internal static PullRequestDiffReply Create(BitbucketPullRequestComment comment) => new(comment);
+
+    internal void ConfigureReply(
+        Action<IPullRequestReplyTarget> openReply,
+        Action<IPullRequestReplyTarget> cancelReply,
+        Func<IPullRequestReplyTarget, string, CancellationToken, Task> sendReplyAsync)
+    {
+        if (CommentId is null or <= 0)
+        {
+            return;
+        }
+
+        _openReply = openReply;
+        _cancelReply = cancelReply;
+        _sendReplyAsync = sendReplyAsync;
+        OpenReplyCommand ??= new AsyncCommand((_, _) =>
+        {
+            _openReply?.Invoke(this);
+            return Task.CompletedTask;
+        });
+        CancelReplyCommand ??= new AsyncCommand((_, _) =>
+        {
+            _cancelReply?.Invoke(this);
+            return Task.CompletedTask;
+        });
+        SendReplyCommand ??= new AsyncCommand((parameter, cancellationToken) =>
+            _sendReplyAsync?.Invoke(
+                this,
+                parameter as string ?? string.Empty,
+                cancellationToken) ?? Task.CompletedTask);
+        CanReply = true;
+        OpenReplyCommand.CanExecute = true;
+        SendReplyCommand.CanExecute = !string.IsNullOrWhiteSpace(ReplyContent);
+    }
+
+    void IPullRequestReplyTarget.OpenReplyEditor()
+    {
+        ReplyStatus = string.Empty;
+        IsReplyEditorOpen = true;
+    }
+
+    void IPullRequestReplyTarget.CloseReplyEditor(bool clearDraft)
+    {
+        IsReplyEditorOpen = false;
+        ReplyStatus = string.Empty;
+        if (clearDraft)
+        {
+            ReplyContent = string.Empty;
+        }
+    }
+
+    void IPullRequestReplyTarget.SetReplyStatus(string status)
+    {
+        ReplyStatus = status;
+    }
+}
+
+[DataContract]
+internal sealed class PullRequestCommentContentBlock
+{
+    private string _kind;
+    private string _text;
+    private string _imageUrl;
+
+    private PullRequestCommentContentBlock(
+        string kind,
+        string text,
+        string imageUrl,
+        string alternativeText)
+    {
+        _kind = kind;
+        _text = text;
+        _imageUrl = imageUrl;
+        AlternativeText = alternativeText;
+    }
+
+    [DataMember]
+    public string Kind => _kind;
+
+    [DataMember]
+    public string Text => _text;
+
+    [DataMember]
+    public string ImageUrl => _imageUrl;
+
+    [DataMember]
+    public string AlternativeText { get; }
+
+    internal static PullRequestCommentContentBlock CreateText(string text) =>
+        new("Text", text, string.Empty, string.Empty);
+
+    internal static PullRequestCommentContentBlock CreateImage(string imageUrl, string alternativeText) =>
+        new(
+            "Image",
+            string.Empty,
+            imageUrl,
+            string.IsNullOrWhiteSpace(alternativeText) ? "Imagen del comentario" : alternativeText);
+
+    internal void UseLocalImage(string localImageUrl)
+    {
+        _imageUrl = localImageUrl;
+    }
+
+    internal void SetImageUnavailable()
+    {
+        _kind = "Text";
+        _text = $"No se pudo cargar la imagen: {AlternativeText}";
+        _imageUrl = string.Empty;
+    }
 }
