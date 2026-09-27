@@ -32,7 +32,7 @@ La extensión promete **gestionar Pull Requests de Bitbucket e Historias de Usua
 | U6 | "Diff nativo" ejecuta `devenv.exe /Diff`, que abre **otra instancia** de Visual Studio. | Abrir los temporales en la instancia actual o, si VS.Extensibility no expone el comparador, quitar el botón y mejorar el diff propio (vista dividida). | M |
 | U7 | Resaltado de sintaxis sólo para C#. | Tokenizer liviano por extensión (JSON, XML/XAML, TS/JS, SQL) o sin color pero con numeración legible. | M |
 | U8 | Reviewers sin estado; sin build status. | Badges "aprobó / pidió cambios" y estado de pipelines. | S |
-| U9 | Comentarios: sólo se puede responder. | Comentario nuevo (general e inline en la línea del diff), editar, borrar, resolver/reabrir. | L |
+| U9 | ~~Comentarios: sólo se puede responder.~~ | ✅ Hecho: comentario nuevo (general y en línea desde el botón "+" del diff), editar/borrar propios con confirmación, resolver/reabrir. | L |
 | U10 | `PullRequestSelectionControl.xaml` (~990 líneas) repite 3 veces la plantilla de comentario/respuesta. | Extraer `DataTemplate`s a un diccionario en `Presentation/Shared/Layout`. | S |
 
 ## 3. Optimización
@@ -54,7 +54,7 @@ La extensión promete **gestionar Pull Requests de Bitbucket e Historias de Usua
 
 ### Fase 1 — Bitbucket Cloud completo *(prioridad)*
 1. **Acciones sobre el PR**: aprobar / quitar aprobación, pedir cambios, declinar, merge (con estrategia y cierre de rama) → nuevos métodos en `IBitbucketPullRequestService`.
-2. **Comentarios**: nuevo general e inline, editar, borrar, resolver/reabrir (API `comments` + `resolve`).
+2. ✅ **Comentarios**: nuevo general e inline, editar, borrar, resolver/reabrir (API `comments` + `resolve`). Editar/borrar sólo en comentarios propios (`/2.0/user`).
 3. **Tareas** reales (`/pullrequests/{id}/tasks`): listar, crear, marcar hecha — reemplaza el placeholder.
 4. **Actividad** real (`/pullrequests/{id}/activity`) y **commits** del PR (`/commits`).
 5. **Build statuses** (`/commit/{hash}/statuses`) y estado de reviewers (`participants`).

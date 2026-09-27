@@ -33,6 +33,8 @@ internal sealed class PullRequestBrowserData : NotifyPropertyChangedObject
         Detail = detail;
         Files = files;
         Comments = comments;
+        Files.CommentsChanged += ReloadCommentsTab;
+        Comments.CommentsChanged += Files.ReloadSelectedFileDiff;
     }
 
     [DataMember]
@@ -239,7 +241,19 @@ internal sealed class PullRequestBrowserData : NotifyPropertyChangedObject
         await commentsTask;
     }
 
-    private bool IsCurrentContext(long contextVersion) =>
+    private void ReloadCommentsTab()
+    {
+        if (SelectedPullRequestId is not long pullRequestId ||
+            string.IsNullOrWhiteSpace(_workspaceSlug) ||
+            string.IsNullOrWhiteSpace(_repositorySlug))
+        {
+            return;
+        }
+
+        _ = Comments.LoadAsync(_workspaceSlug, _repositorySlug, pullRequestId, CancellationToken.None);
+    }
+
+        private bool IsCurrentContext(long contextVersion) =>
         contextVersion == Volatile.Read(ref _contextVersion);
 
     private bool IsCurrentSelection(long pullRequestId, long contextVersion, long selectionVersion) =>

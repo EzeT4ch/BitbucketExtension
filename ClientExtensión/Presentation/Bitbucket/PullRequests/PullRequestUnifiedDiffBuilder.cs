@@ -3,6 +3,7 @@ using System.Net;
 using System.Runtime.Serialization;
 using System.Text.RegularExpressions;
 using BitbucketAdapter.Domain.PullRequests;
+using ClientExtension.Presentation.Bitbucket.PullRequests.Data;
 using Microsoft.VisualStudio.Extensibility.UI;
 
 namespace ClientExtension.Presentation.Bitbucket.PullRequests;
@@ -506,6 +507,14 @@ internal sealed class PullRequestDiffRow : NotifyPropertyChangedObject, IPullReq
     private string _replyStatus = string.Empty;
     private bool _isReplyEditorOpen;
     private bool _canReply;
+    private Action<PullRequestDiffRow>? _openComment;
+    private Action<PullRequestDiffRow>? _cancelComment;
+    private Func<PullRequestDiffRow, string, CancellationToken, Task>? _sendCommentAsync;
+    private string _newCommentContent = string.Empty;
+    private string _newCommentStatus = string.Empty;
+    private bool _isCommentEditorOpen;
+    private bool _canAddComment;
+    private PullRequestCommentActions? _actions;
 
     private PullRequestDiffRow(
         string rowType,
@@ -522,8 +531,10 @@ internal sealed class PullRequestDiffRow : NotifyPropertyChangedObject, IPullReq
         string state = "",
         string location = "",
         string thread = "",
-        IReadOnlyList<PullRequestDiffReply>? replies = null)
+        IReadOnlyList<PullRequestDiffReply>? replies = null,
+        BitbucketPullRequestComment? sourceComment = null)
     {
+        SourceComment = sourceComment;
         RowType = rowType;
         ChangeType = changeType;
         BeforeLine = beforeLine;
@@ -546,6 +557,8 @@ internal sealed class PullRequestDiffRow : NotifyPropertyChangedObject, IPullReq
         Thread = thread;
         Replies = replies?.ToArray() ?? [];
     }
+
+    internal BitbucketPullRequestComment? SourceComment { get; }
 
     [DataMember]
     public string RowType { get; }
@@ -650,6 +663,132 @@ internal sealed class PullRequestDiffRow : NotifyPropertyChangedObject, IPullReq
 
     [DataMember]
     public AsyncCommand? SendReplyCommand { get; private set; }
+
+    [DataMember]
+    public PullRequestCommentActions? Actions
+    {
+        get => _actions;
+        private set => SetProperty(ref _actions, value);
+    }
+
+    [DataMember]
+    public bool CanAddComment
+    {
+        get => _canAddComment;
+        private set => SetProperty(ref _canAddComment, value);
+    }
+
+    [DataMember]
+    public string NewCommentContent
+    {
+        get => _newCommentContent;
+        set
+        {
+            if (SetProperty(ref _newCommentContent, value) && SendCommentCommand is not null)
+            {
+                SendCommentCommand.CanExecute = CanAddComment && !string.IsNullOrWhiteSpace(value);
+            }
+        }
+    }
+
+    [DataMember]
+    public string NewCommentStatus
+    {
+        get => _newCommentStatus;
+        private set => SetProperty(ref _newCommentStatus, value);
+    }
+
+    [DataMember]
+    public bool IsCommentEditorOpen
+    {
+        get => _isCommentEditorOpen;
+        private set => SetProperty(ref _isCommentEditorOpen, value);
+    }
+
+    [DataMember]
+    public AsyncCommand? OpenCommentCommand { get; private set; }
+
+    [DataMember]
+    public AsyncCommand? CancelCommentCommand { get; private set; }
+
+    [DataMember]
+    public AsyncCommand? SendCommentCommand { get; private set; }
+
+    internal void ConfigureActions(PullRequestCommentActions actions)
+    {
+        if (CommentId is null or <= 0)
+        {
+            return;
+        }
+
+        Actions = actions;
+    }
+
+    internal void ConfigureComment(
+        Action<PullRequestDiffRow> openComment,
+        Action<PullRequestDiffRow> cancelComment,
+        Func<PullRequestDiffRow, string, CancellationToken, Task> sendCommentAsync)
+    {
+        if (!CanComment)
+        {
+            return;
+        }
+
+        _openComment = openComment;
+        _cancelComment = cancelComment;
+        _sendCommentAsync = sendCommentAsync;
+        OpenCommentCommand ??= new AsyncCommand((_, _) =>
+        {
+            _openComment?.Invoke(this);
+            return Task.CompletedTask;
+        });
+        CancelCommentCommand ??= new AsyncCommand((_, _) =>
+        {
+            _cancelComment?.Invoke(this);
+            return Task.CompletedTask;
+        });
+        SendCommentCommand ??= new AsyncCommand((parameter, cancellationToken) =>
+            _sendCommentAsync?.Invoke(
+                this,
+                parameter as string ?? NewCommentContent,
+                cancellationToken) ?? Task.CompletedTask);
+        CanAddComment = true;
+        OpenCommentCommand.CanExecute = true;
+        SendCommentCommand.CanExecute = !string.IsNullOrWhiteSpace(NewCommentContent);
+    }
+
+    internal BitbucketPullRequestCommentAnchor? BuildCommentAnchor(string filePath)
+    {
+        if (!CanComment || string.IsNullOrWhiteSpace(filePath))
+        {
+            return null;
+        }
+
+        return ChangeType == "Removed"
+            ? BeforeLine is null ? null : new BitbucketPullRequestCommentAnchor(filePath, BeforeLine, null)
+            : AfterLine is null ? null : new BitbucketPullRequestCommentAnchor(filePath, null, AfterLine);
+    }
+
+    internal void OpenCommentEditor()
+    {
+        NewCommentStatus = string.Empty;
+        IsCommentEditorOpen = true;
+    }
+
+    internal void CloseCommentEditor(bool clearDraft)
+    {
+        IsCommentEditorOpen = false;
+        NewCommentStatus = string.Empty;
+        if (clearDraft)
+        {
+            NewCommentContent = string.Empty;
+        }
+    }
+
+    internal void SetCommentStatus(string status)
+    {
+        NewCommentStatus = status;
+    }
 
     internal void ConfigureReply(
         Action<IPullRequestReplyTarget> openReply,
@@ -765,7 +904,8 @@ internal sealed class PullRequestDiffRow : NotifyPropertyChangedObject, IPullReq
             comment.ParentId is null ? "Sin resolver" : "Respuesta",
             location,
             comment.ParentId is null ? string.Empty : $"Respuesta al comentario #{comment.ParentId.Value}",
-            replyRows);
+            replyRows,
+            comment);
     }
 
     private static string FormatLineNumber(int? lineNumber) =>
@@ -843,9 +983,11 @@ internal sealed class PullRequestDiffReply : NotifyPropertyChangedObject, IPullR
     private string _replyStatus = string.Empty;
     private bool _isReplyEditorOpen;
     private bool _canReply;
+    private PullRequestCommentActions? _actions;
 
     private PullRequestDiffReply(BitbucketPullRequestComment comment)
     {
+        SourceComment = comment;
         CommentId = comment.Id;
         Author = comment.AuthorDisplayName;
         AuthorInitials = PullRequestDiffRow.BuildInitials(comment.AuthorDisplayName);
@@ -875,6 +1017,20 @@ internal sealed class PullRequestDiffReply : NotifyPropertyChangedObject, IPullR
 
     [DataMember]
     public string State { get; } = "Respuesta";
+
+    internal BitbucketPullRequestComment SourceComment { get; }
+
+    [DataMember]
+    public PullRequestCommentActions? Actions
+    {
+        get => _actions;
+        private set => SetProperty(ref _actions, value);
+    }
+
+    internal void ConfigureActions(PullRequestCommentActions actions)
+    {
+        Actions = actions;
+    }
 
     [DataMember]
     public bool CanReply

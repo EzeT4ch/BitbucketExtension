@@ -10,6 +10,7 @@ using BitbucketAdapter.Infrastructure.Auth.AppPassword;
 using BitbucketAdapter.Infrastructure.Auth.OAuth;
 using BitbucketAdapter.Infrastructure.Repositories;
 using BitbucketAdapter.Infrastructure.PullRequests;
+using BitbucketAdapter.Infrastructure.Users;
 using BitbucketAdapter.Infrastructure.Workspaces;
 using ClientExtension.Application.Abstractions;
 using ClientExtension.Composition.AppPassword;
@@ -48,6 +49,7 @@ internal static class BitbucketCompositionRoot
         services.AddSingleton<IBitbucketPullRequestService, BitbucketPullRequestService>();
         services.AddSingleton<IBitbucketPullRequestChangesService, BitbucketPullRequestChangesService>();
         services.AddSingleton<IBitbucketPullRequestCommentService, BitbucketPullRequestCommentService>();
+        services.AddSingleton<IBitbucketCurrentUserService, BitbucketCurrentUserService>();
         services.AddSingleton<IPullRequestDiffDocumentService, VisualStudioPullRequestDiffDocumentService>();
         services.AddSingleton<PullRequestDetailData>();
         services.AddSingleton<PullRequestFilesData>();

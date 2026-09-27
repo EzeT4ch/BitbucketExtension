@@ -8,10 +8,11 @@ using Microsoft.VisualStudio.Extensibility.UI;
 namespace ClientExtension.Presentation.Bitbucket.PullRequests.Data;
 
 [DataContract]
-internal sealed class PullRequestFilesData : NotifyPropertyChangedObject
+internal sealed class PullRequestFilesData : NotifyPropertyChangedObject, IPullRequestCommentActionHandler
 {
     private readonly IBitbucketPullRequestChangesService _pullRequestChangesService;
     private readonly IBitbucketPullRequestCommentService _pullRequestCommentService;
+    private readonly IBitbucketCurrentUserService _currentUserService;
     private readonly IPullRequestDiffDocumentService _diffDocumentService;
     private readonly Dictionary<string, BitbucketPullRequestFileChange> _changedFilesByPath =
         new(StringComparer.Ordinal);
@@ -19,6 +20,7 @@ internal sealed class PullRequestFilesData : NotifyPropertyChangedObject
     private readonly SemaphoreSlim _diffLoadSemaphore = new(1, 1);
 
     private IPullRequestReplyTarget? _activeDiffReplyRow;
+    private PullRequestDiffRow? _activeDiffCommentRow;
     private string? _workspaceSlug;
     private string? _repositorySlug;
     private long? _pullRequestId;
@@ -38,14 +40,18 @@ internal sealed class PullRequestFilesData : NotifyPropertyChangedObject
     public PullRequestFilesData(
         IBitbucketPullRequestChangesService pullRequestChangesService,
         IBitbucketPullRequestCommentService pullRequestCommentService,
+        IBitbucketCurrentUserService currentUserService,
         IPullRequestDiffDocumentService diffDocumentService)
     {
         _pullRequestChangesService = pullRequestChangesService;
         _pullRequestCommentService = pullRequestCommentService;
+        _currentUserService = currentUserService;
         _diffDocumentService = diffDocumentService;
         OpenDiffDocumentCommand = new AsyncCommand(OpenDiffDocumentAsync);
         SetDiffPlaceholder("Seleccioná un archivo para visualizar sus cambios.");
     }
+
+    internal event Action? CommentsChanged;
 
     [DataMember]
     public ObservableCollection<PullRequestFileTreeNode> Tree { get; } = [];
@@ -214,6 +220,14 @@ internal sealed class PullRequestFilesData : NotifyPropertyChangedObject
         }
     }
 
+    internal void ReloadSelectedFileDiff()
+    {
+        if (!string.IsNullOrWhiteSpace(SelectedPath))
+        {
+            LoadSelectedFileDiff(SelectedPath);
+        }
+    }
+
     private void LoadSelectedFileDiff(string? filePath)
     {
         var diffVersion = Interlocked.Increment(ref _diffVersion);
@@ -277,9 +291,11 @@ internal sealed class PullRequestFilesData : NotifyPropertyChangedObject
                 pullRequestId,
                 filePath,
                 cancellationToken);
+            var currentUserTask = GetCurrentUserUuidSafelyAsync(cancellationToken);
 
             var diff = await diffTask;
             var commentsResult = await commentsTask;
+            var currentUserUuid = await currentUserTask;
             if (!IsCurrentFileSelection(filePath, loadVersion, diffVersion))
             {
                 return;
@@ -312,9 +328,16 @@ internal sealed class PullRequestFilesData : NotifyPropertyChangedObject
             foreach (var row in rows)
             {
                 row.ConfigureReply(OpenDiffReply, CancelDiffReply, SendDiffReplyAsync);
+                row.ConfigureComment(OpenDiffComment, CancelDiffComment, SendDiffCommentAsync);
+                if (row.SourceComment is not null)
+                {
+                    row.ConfigureActions(PullRequestCommentActions.Create(row.SourceComment, currentUserUuid, this));
+                }
+
                 foreach (var reply in row.Replies)
                 {
                     reply.ConfigureReply(OpenDiffReply, CancelDiffReply, SendDiffReplyAsync);
+                    reply.ConfigureActions(PullRequestCommentActions.Create(reply.SourceComment, currentUserUuid, this));
                 }
 
                 DiffRows.Add(row);
@@ -572,12 +595,226 @@ internal sealed class PullRequestFilesData : NotifyPropertyChangedObject
         _activeDiffReplyRow = null;
         row.CloseReplyEditor(clearDraft: true);
         LoadSelectedFileDiff(filePath);
+        CommentsChanged?.Invoke();
     }
 
     private void CloseActiveDiffReply()
     {
         _activeDiffReplyRow?.CloseReplyEditor(clearDraft: true);
         _activeDiffReplyRow = null;
+        _activeDiffCommentRow?.CloseCommentEditor(clearDraft: true);
+        _activeDiffCommentRow = null;
+    }
+
+    private void OpenDiffComment(PullRequestDiffRow row)
+    {
+        if (!row.CanAddComment || !DiffRows.Contains(row))
+        {
+            return;
+        }
+
+        if (!ReferenceEquals(_activeDiffCommentRow, row))
+        {
+            CloseActiveDiffReply();
+            _activeDiffCommentRow = row;
+        }
+
+        row.OpenCommentEditor();
+    }
+
+    private void CancelDiffComment(PullRequestDiffRow row)
+    {
+        if (ReferenceEquals(_activeDiffCommentRow, row))
+        {
+            _activeDiffCommentRow = null;
+        }
+
+        row.CloseCommentEditor(clearDraft: true);
+    }
+
+    private async Task SendDiffCommentAsync(
+        PullRequestDiffRow row,
+        string markdownContent,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(markdownContent))
+        {
+            row.SetCommentStatus("Escribí un comentario antes de enviarlo.");
+            return;
+        }
+
+        var workspaceSlug = _workspaceSlug;
+        var repositorySlug = _repositorySlug;
+        var pullRequestId = _pullRequestId;
+        var filePath = SelectedPath;
+        var loadVersion = Volatile.Read(ref _loadVersion);
+        var diffVersion = Volatile.Read(ref _diffVersion);
+        var anchor = filePath is null ? null : row.BuildCommentAnchor(filePath);
+        if (string.IsNullOrWhiteSpace(workspaceSlug) ||
+            string.IsNullOrWhiteSpace(repositorySlug) ||
+            pullRequestId is null or <= 0 ||
+            string.IsNullOrWhiteSpace(filePath) ||
+            anchor is null ||
+            !IsCurrentFileSelection(filePath, loadVersion, diffVersion))
+        {
+            row.SetCommentStatus("El archivo o el Pull Request cambió. Volvé a abrir el comentario.");
+            return;
+        }
+
+        row.SetCommentStatus("Enviando comentario...");
+        try
+        {
+            await _pullRequestCommentService.CreateAsync(
+                workspaceSlug,
+                repositorySlug,
+                pullRequestId.Value,
+                markdownContent,
+                anchor,
+                cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            if (IsCurrentFileSelection(filePath, loadVersion, diffVersion))
+            {
+                row.SetCommentStatus("Se canceló el envío del comentario.");
+            }
+
+            return;
+        }
+        catch (Exception exception)
+        {
+            if (IsCurrentFileSelection(filePath, loadVersion, diffVersion))
+            {
+                row.SetCommentStatus($"No se pudo enviar el comentario: {exception.Message}");
+            }
+
+            return;
+        }
+
+        if (!IsCurrentFileSelection(filePath, loadVersion, diffVersion))
+        {
+            return;
+        }
+
+        _activeDiffCommentRow = null;
+        row.CloseCommentEditor(clearDraft: true);
+        LoadSelectedFileDiff(filePath);
+        CommentsChanged?.Invoke();
+    }
+
+    Task IPullRequestCommentActionHandler.SaveEditAsync(
+        PullRequestCommentActions actions,
+        string markdownContent,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(markdownContent))
+        {
+            actions.SetStatus("El comentario no puede quedar vacío.");
+            return Task.CompletedTask;
+        }
+
+        return RunDiffCommentActionAsync(
+            actions,
+            "Guardando cambios...",
+            "No se pudo editar el comentario",
+            (workspaceSlug, repositorySlug, pullRequestId, token) => _pullRequestCommentService.UpdateAsync(
+                workspaceSlug,
+                repositorySlug,
+                pullRequestId,
+                actions.CommentId,
+                markdownContent,
+                token),
+            cancellationToken);
+    }
+
+    Task IPullRequestCommentActionHandler.DeleteAsync(
+        PullRequestCommentActions actions,
+        CancellationToken cancellationToken) =>
+        RunDiffCommentActionAsync(
+            actions,
+            "Eliminando comentario...",
+            "No se pudo eliminar el comentario",
+            (workspaceSlug, repositorySlug, pullRequestId, token) => _pullRequestCommentService.DeleteAsync(
+                workspaceSlug,
+                repositorySlug,
+                pullRequestId,
+                actions.CommentId,
+                token),
+            cancellationToken);
+
+    Task IPullRequestCommentActionHandler.SetResolvedAsync(
+        PullRequestCommentActions actions,
+        bool isResolved,
+        CancellationToken cancellationToken) =>
+        RunDiffCommentActionAsync(
+            actions,
+            isResolved ? "Resolviendo hilo..." : "Reabriendo hilo...",
+            isResolved ? "No se pudo resolver el hilo" : "No se pudo reabrir el hilo",
+            (workspaceSlug, repositorySlug, pullRequestId, token) => isResolved
+                ? _pullRequestCommentService.ResolveAsync(
+                    workspaceSlug,
+                    repositorySlug,
+                    pullRequestId,
+                    actions.CommentId,
+                    token)
+                : _pullRequestCommentService.ReopenAsync(
+                    workspaceSlug,
+                    repositorySlug,
+                    pullRequestId,
+                    actions.CommentId,
+                    token),
+            cancellationToken);
+
+    private async Task RunDiffCommentActionAsync(
+        PullRequestCommentActions actions,
+        string busyStatus,
+        string errorPrefix,
+        Func<string, string, long, CancellationToken, Task> operation,
+        CancellationToken cancellationToken)
+    {
+        var workspaceSlug = _workspaceSlug;
+        var repositorySlug = _repositorySlug;
+        var pullRequestId = _pullRequestId;
+        var filePath = SelectedPath;
+        var loadVersion = Volatile.Read(ref _loadVersion);
+        var diffVersion = Volatile.Read(ref _diffVersion);
+        if (string.IsNullOrWhiteSpace(workspaceSlug) ||
+            string.IsNullOrWhiteSpace(repositorySlug) ||
+            pullRequestId is null or <= 0 ||
+            string.IsNullOrWhiteSpace(filePath) ||
+            !IsCurrentFileSelection(filePath, loadVersion, diffVersion))
+        {
+            actions.SetStatus("El archivo o el Pull Request cambió. Volvé a intentarlo.");
+            return;
+        }
+
+        var succeeded = await actions.RunAsync(
+            busyStatus,
+            errorPrefix,
+            token => operation(workspaceSlug, repositorySlug, pullRequestId.Value, token),
+            cancellationToken);
+        if (succeeded && IsCurrentFileSelection(filePath, loadVersion, diffVersion))
+        {
+            LoadSelectedFileDiff(filePath);
+            CommentsChanged?.Invoke();
+        }
+    }
+
+    private async Task<string?> GetCurrentUserUuidSafelyAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var user = await _currentUserService.GetAsync(cancellationToken);
+            return user.Uuid;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
     }
 
     private async Task<(IReadOnlyList<BitbucketPullRequestComment> Comments, string? ErrorMessage)>
