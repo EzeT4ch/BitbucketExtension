@@ -38,7 +38,7 @@ public sealed class BitbucketWorkspaceServiceTests
         Assert.Equal(["alpha", "beta", "zeta"], result.Select(workspace => workspace.Slug));
         Assert.Equal(2, sender.Requests.Count);
         Assert.Equal(
-            new Uri("https://api.bitbucket.org/2.0/user/workspaces"),
+            new Uri("https://api.bitbucket.org/2.0/user/workspaces?pagelen=100"),
             sender.Requests[0].Request.Endpoint);
         Assert.Equal(
             new Uri("https://api.bitbucket.org/2.0/user/workspaces?page=2"),

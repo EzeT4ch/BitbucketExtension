@@ -242,7 +242,7 @@ public sealed class BitbucketPullRequestCommentServiceTests
 
         Assert.Equal(2, sender.Requests.Count);
         Assert.Equal(
-            "https://api.bitbucket.org/2.0/repositories/team/repo/pullrequests/42/comments",
+            "https://api.bitbucket.org/2.0/repositories/team/repo/pullrequests/42/comments?pagelen=100",
             sender.Requests[0].Request.Endpoint.AbsoluteUri);
         Assert.Equal(
             "https://api.bitbucket.org/2.0/repositories/team/repo/pullrequests/42/comments?page=2",
@@ -264,7 +264,7 @@ public sealed class BitbucketPullRequestCommentServiceTests
 
         var request = rawSender.Requests.Single().Request;
         Assert.Equal(
-            "https://api.bitbucket.org/2.0/repositories/team%20space/repo%20name/pullrequests/7/comments",
+            "https://api.bitbucket.org/2.0/repositories/team%20space/repo%20name/pullrequests/7/comments?pagelen=100",
             request.Endpoint.AbsoluteUri);
         var credential = Assert.IsType<BearerTokenCredential>(request.Credential);
         Assert.Equal("access-token", credential.Token);
@@ -340,7 +340,7 @@ public sealed class BitbucketPullRequestCommentServiceTests
         Assert.Equal("src/UseCase.cs", result[2].FilePath);
         Assert.Equal(212, result[2].ToLine);
         Assert.Equal(
-            "https://api.bitbucket.org/2.0/repositories/team/repo/pullrequests/42/comments",
+            "https://api.bitbucket.org/2.0/repositories/team/repo/pullrequests/42/comments?pagelen=100",
             sender.Requests[0].Request.Endpoint.AbsoluteUri);
         Assert.All(sender.Requests, request =>
             Assert.Equal(cancellationTokenSource.Token, request.CancellationToken));
@@ -414,8 +414,68 @@ public sealed class BitbucketPullRequestCommentServiceTests
             CancellationToken.None));
     }
 
+    [Fact]
+    public async Task GetUnresolvedForFileAsync_AfterGetAll_ReusesCachedComments()
+    {
+        var sender = new QueueRequestSender(Success("{\"values\":[]}"));
+        var service = new BitbucketPullRequestCommentService(sender);
+
+        await service.GetAllAsync("team", "repo", 42, CancellationToken.None);
+        await service.GetUnresolvedForFileAsync("team", "repo", 42, "src/File.cs", CancellationToken.None);
+
+        Assert.Single(sender.Requests);
+    }
+
+    [Fact]
+    public async Task GetAllAsync_AfterCreateReply_ReloadsComments()
+    {
+        var sender = new QueueRequestSender(
+            Success("{\"values\":[]}"),
+            Success("{\"id\":98}"),
+            Success("{\"values\":[]}"));
+        var service = new BitbucketPullRequestCommentService(sender);
+
+        await service.GetAllAsync("team", "repo", 42, CancellationToken.None);
+        await service.CreateReplyAsync("team", "repo", 42, 17, "respuesta", CancellationToken.None);
+        await service.GetAllAsync("team", "repo", 42, CancellationToken.None);
+
+        Assert.Equal(3, sender.Requests.Count);
+        Assert.Equal(HttpMethodType.Get, sender.Requests[2].Request.Method);
+    }
+
+    [Fact]
+    public async Task GetAllAsync_WhenCacheExpires_ReloadsComments()
+    {
+        var timeProvider = new ManualTimeProvider(DateTimeOffset.Parse("2026-01-01T00:00:00Z"));
+        var sender = new QueueRequestSender(Success("{\"values\":[]}"), Success("{\"values\":[]}"));
+        var service = new BitbucketPullRequestCommentService(sender, timeProvider);
+
+        await service.GetAllAsync("team", "repo", 42, CancellationToken.None);
+        timeProvider.Advance(TimeSpan.FromSeconds(30));
+        await service.GetAllAsync("team", "repo", 42, CancellationToken.None);
+        Assert.Single(sender.Requests);
+
+        timeProvider.Advance(TimeSpan.FromSeconds(31));
+        await service.GetAllAsync("team", "repo", 42, CancellationToken.None);
+        Assert.Equal(2, sender.Requests.Count);
+    }
+
     private static ResponseMessage Success(string content) =>
         new(200, true, new Dictionary<string, string>(), content);
+
+    private sealed class ManualTimeProvider : TimeProvider
+    {
+        private DateTimeOffset _utcNow;
+
+        public ManualTimeProvider(DateTimeOffset utcNow)
+        {
+            _utcNow = utcNow;
+        }
+
+        public void Advance(TimeSpan duration) => _utcNow += duration;
+
+        public override DateTimeOffset GetUtcNow() => _utcNow;
+    }
 
     private sealed class QueueRequestSender : IHttpRequestSender
     {

@@ -10,7 +10,7 @@ namespace BitbucketAdapter.Infrastructure.Workspaces;
 
 public sealed class BitbucketWorkspaceService : IBitbucketWorkspaceService
 {
-    private static readonly Uri WorkspacesEndpoint = new("https://api.bitbucket.org/2.0/user/workspaces");
+    private static readonly Uri WorkspacesEndpoint = new("https://api.bitbucket.org/2.0/user/workspaces?pagelen=100");
     private static readonly IReadOnlyDictionary<string, string> Headers =
         new Dictionary<string, string> { ["Accept"] = "application/json" };
 

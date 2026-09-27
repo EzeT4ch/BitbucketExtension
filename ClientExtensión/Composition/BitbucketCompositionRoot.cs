@@ -21,13 +21,14 @@ using Microsoft.VisualStudio.Extensibility;
 using RequestAdapter.Application.Abstractions;
 using RequestAdapter.Application.Auth;
 using RequestAdapter.Infrastructure.Http;
-using ClientExtension.Presentation.Bitbucket.PullRequests.Diff;
 using ClientExtension.Presentation.Bitbucket.PullRequests.Data;
 
 namespace ClientExtension.Composition;
 
 internal static class BitbucketCompositionRoot
 {
+    private static readonly HttpClient SharedHttpClient = new();
+
     public static IServiceCollection AddBitbucketServices(this IServiceCollection services)
     {
         services.AddSingleton<IBitbucketAuthMethodStore>(_ => new FileBitbucketAuthMethodStore());
@@ -47,7 +48,6 @@ internal static class BitbucketCompositionRoot
         services.AddSingleton<IBitbucketPullRequestService, BitbucketPullRequestService>();
         services.AddSingleton<IBitbucketPullRequestChangesService, BitbucketPullRequestChangesService>();
         services.AddSingleton<IBitbucketPullRequestCommentService, BitbucketPullRequestCommentService>();
-        services.AddSingleton<PullRequestDiffViewData>();
         services.AddSingleton<IPullRequestDiffDocumentService, VisualStudioPullRequestDiffDocumentService>();
         services.AddSingleton<PullRequestDetailData>();
         services.AddSingleton<PullRequestFilesData>();
@@ -66,8 +66,7 @@ internal static class BitbucketCompositionRoot
         IBitbucketAuthMethodStore authMethodStore,
         Func<IBitbucketOAuthTokenProvider> oAuthTokenProviderFactory)
     {
-        var httpClient = new HttpClient();
-        IHttpRequestSender rawSender = new HttpClientRequestSender(httpClient);
+        IHttpRequestSender rawSender = new HttpClientRequestSender(SharedHttpClient);
 
         IAppPasswordCredentialStore credentialStore = new DpapiAppPasswordCredentialStore();
         IAppPasswordPrompt credentialPrompt = new BitbucketAppPasswordPrompt(extensibility);
@@ -86,7 +85,7 @@ internal static class BitbucketCompositionRoot
     private static IBitbucketOAuthTokenProvider BuildOAuthTokenProvider(IOAuthTokenStore tokenStore)
     {
         var consumer = BitbucketOAuthConsumerSecrets.Load();
-        IHttpRequestSender rawSender = new HttpClientRequestSender(new HttpClient());
+        IHttpRequestSender rawSender = new HttpClientRequestSender(SharedHttpClient);
         var tokenExchangeClient = new BitbucketOAuthTokenExchangeClient(rawSender, consumer);
         IAuthorizationCodeProvider authorizationCodeProvider = new BitbucketLoopbackAuthorizationCodeProvider(consumer);
 

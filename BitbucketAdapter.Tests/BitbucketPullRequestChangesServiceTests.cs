@@ -91,7 +91,7 @@ public sealed class BitbucketPullRequestChangesServiceTests
         Assert.Equal(1, result[1].LinesRemoved);
         Assert.Equal(2, sender.Requests.Count);
         Assert.Equal(
-            "https://api.bitbucket.org/2.0/repositories/team/repo/diffstat/source123..dest456?topic=true",
+            "https://api.bitbucket.org/2.0/repositories/team/repo/diffstat/source123..dest456?topic=true&pagelen=500",
             sender.Requests[0].Request.Endpoint.AbsoluteUri);
         Assert.Equal("application/json", sender.Requests[0].Request.Headers?["Accept"]);
         Assert.All(sender.Requests, request => Assert.Equal(cancellationTokenSource.Token, request.CancellationToken));

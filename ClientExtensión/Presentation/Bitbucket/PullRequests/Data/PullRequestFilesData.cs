@@ -452,6 +452,16 @@ internal sealed class PullRequestFilesData : NotifyPropertyChangedObject
             try
             {
                 var sourceUri = new Uri(imageGroup.Key, UriKind.Absolute);
+                if (PullRequestCommentImageCache.TryGetLocalUrl(sourceUri, out var cachedImageUrl))
+                {
+                    foreach (var block in imageGroup)
+                    {
+                        block.UseLocalImage(cachedImageUrl);
+                    }
+
+                    continue;
+                }
+
                 var image = await _pullRequestCommentService.GetImageAsync(
                     workspaceSlug,
                     repositorySlug,

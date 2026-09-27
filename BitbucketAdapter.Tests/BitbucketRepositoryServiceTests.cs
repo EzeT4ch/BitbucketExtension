@@ -38,7 +38,7 @@ public sealed class BitbucketRepositoryServiceTests
         Assert.Equal(["alpha-api", "beta-api", "zeta-api"], result.Select(repository => repository.Slug));
         Assert.Equal(2, sender.Requests.Count);
         Assert.Equal(
-            new Uri("https://api.bitbucket.org/2.0/repositories/team-workspace"),
+            new Uri("https://api.bitbucket.org/2.0/repositories/team-workspace?pagelen=100"),
             sender.Requests[0].Request.Endpoint);
         Assert.Equal(
             new Uri("https://api.bitbucket.org/2.0/repositories/team-workspace?page=2"),
@@ -56,7 +56,7 @@ public sealed class BitbucketRepositoryServiceTests
         await service.GetAllAsync("team workspace", CancellationToken.None);
 
         Assert.Equal(
-            "https://api.bitbucket.org/2.0/repositories/team%20workspace",
+            "https://api.bitbucket.org/2.0/repositories/team%20workspace?pagelen=100",
             sender.Requests.Single().Request.Endpoint.AbsoluteUri);
     }
 
