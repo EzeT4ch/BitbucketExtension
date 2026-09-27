@@ -1,5 +1,6 @@
 using System.Text.Json;
 using BitbucketAdapter.Domain.Exceptions;
+using BitbucketAdapter.Domain.PullRequests;
 using BitbucketAdapter.Infrastructure.PullRequests;
 using RequestAdapter.Application.Abstractions;
 using RequestAdapter.Application.Auth;
@@ -459,6 +460,173 @@ public sealed class BitbucketPullRequestCommentServiceTests
         await service.GetAllAsync("team", "repo", 42, CancellationToken.None);
         Assert.Equal(2, sender.Requests.Count);
     }
+
+    [Fact]
+    public async Task CreateAsync_WithoutAnchor_PostsGeneralComment()
+    {
+        var sender = new QueueRequestSender(Success("{\"id\":55}"));
+        var service = new BitbucketPullRequestCommentService(sender);
+
+        var id = await service.CreateAsync("team", "repo", 42, "**hola**", null, CancellationToken.None);
+
+        Assert.Equal(55, id);
+        var request = Assert.Single(sender.Requests).Request;
+        Assert.Equal(HttpMethodType.Post, request.Method);
+        Assert.Equal(
+            "https://api.bitbucket.org/2.0/repositories/team/repo/pullrequests/42/comments",
+            request.Endpoint.AbsoluteUri);
+        using var body = JsonDocument.Parse(request.Body!.Content);
+        Assert.Equal("**hola**", body.RootElement.GetProperty("content").GetProperty("raw").GetString());
+        Assert.False(body.RootElement.TryGetProperty("inline", out _));
+    }
+
+    [Theory]
+    [InlineData(null, 12, "to", 12)]
+    [InlineData(8, null, "from", 8)]
+    public async Task CreateAsync_WithAnchor_PostsInlineCommentOnRequestedSide(
+        int? fromLine,
+        int? toLine,
+        string expectedProperty,
+        int expectedLine)
+    {
+        var sender = new QueueRequestSender(Success("{\"id\":56}"));
+        var service = new BitbucketPullRequestCommentService(sender);
+
+        await service.CreateAsync(
+            "team",
+            "repo",
+            42,
+            "comentario",
+            new BitbucketPullRequestCommentAnchor("\\src\\File.cs", fromLine, toLine),
+            CancellationToken.None);
+
+        using var body = JsonDocument.Parse(sender.Requests.Single().Request.Body!.Content);
+        var inline = body.RootElement.GetProperty("inline");
+        Assert.Equal("src/File.cs", inline.GetProperty("path").GetString());
+        Assert.Equal(expectedLine, inline.GetProperty(expectedProperty).GetInt32());
+        Assert.Equal(1, inline.EnumerateObject().Count(property => property.Name is "from" or "to"));
+    }
+
+    [Fact]
+    public async Task CreateAsync_WithAnchorWithoutLine_Throws()
+    {
+        var service = new BitbucketPullRequestCommentService(new QueueRequestSender());
+
+        await Assert.ThrowsAsync<ArgumentException>(() => service.CreateAsync(
+            "team",
+            "repo",
+            42,
+            "comentario",
+            new BitbucketPullRequestCommentAnchor("src/File.cs", null, null),
+            CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task UpdateAsync_PutsNewContent()
+    {
+        var sender = new QueueRequestSender(Success("{\"id\":17}"));
+        var service = new BitbucketPullRequestCommentService(sender);
+
+        await service.UpdateAsync("team", "repo", 42, 17, "editado", CancellationToken.None);
+
+        var request = Assert.Single(sender.Requests).Request;
+        Assert.Equal(HttpMethodType.Put, request.Method);
+        Assert.Equal(
+            "https://api.bitbucket.org/2.0/repositories/team/repo/pullrequests/42/comments/17",
+            request.Endpoint.AbsoluteUri);
+        using var body = JsonDocument.Parse(request.Body!.Content);
+        Assert.Equal("editado", body.RootElement.GetProperty("content").GetProperty("raw").GetString());
+    }
+
+    [Theory]
+    [InlineData("delete", "Delete", "/comments/17")]
+    [InlineData("resolve", "Post", "/comments/17/resolve")]
+    [InlineData("reopen", "Delete", "/comments/17/resolve")]
+    public async Task CommentActions_SendExpectedRequestWithoutBody(
+        string action,
+        string expectedMethod,
+        string expectedSuffix)
+    {
+        var sender = new QueueRequestSender(new ResponseMessage(204, true, new Dictionary<string, string>(), null));
+        var service = new BitbucketPullRequestCommentService(sender);
+
+        await RunActionAsync(service, action);
+
+        var request = Assert.Single(sender.Requests).Request;
+        Assert.Equal(Enum.Parse<HttpMethodType>(expectedMethod), request.Method);
+        Assert.Equal(
+            $"https://api.bitbucket.org/2.0/repositories/team/repo/pullrequests/42{expectedSuffix}",
+            request.Endpoint.AbsoluteUri);
+        Assert.Null(request.Body);
+    }
+
+    [Theory]
+    [InlineData("delete")]
+    [InlineData("resolve")]
+    [InlineData("reopen")]
+    [InlineData("update")]
+    public async Task CommentActions_WhenBitbucketRejects_ThrowsCommentException(string action)
+    {
+        var service = new BitbucketPullRequestCommentService(new QueueRequestSender(
+            new ResponseMessage(403, false, new Dictionary<string, string>(), "{}")));
+
+        var exception = await Assert.ThrowsAsync<BitbucketPullRequestCommentException>(
+            () => RunActionAsync(service, action));
+
+        Assert.Contains("403", exception.Message);
+    }
+
+    [Theory]
+    [InlineData("delete")]
+    [InlineData("resolve")]
+    [InlineData("reopen")]
+    [InlineData("update")]
+    [InlineData("create")]
+    public async Task CommentActions_InvalidateCachedComments(string action)
+    {
+        var sender = new QueueRequestSender(
+            Success("{\"values\":[]}"),
+            Success("{\"id\":17}"),
+            Success("{\"values\":[]}"));
+        var service = new BitbucketPullRequestCommentService(sender);
+
+        await service.GetAllAsync("team", "repo", 42, CancellationToken.None);
+        await RunActionAsync(service, action);
+        await service.GetAllAsync("team", "repo", 42, CancellationToken.None);
+
+        Assert.Equal(3, sender.Requests.Count);
+    }
+
+    [Fact]
+    public async Task GetAllAsync_MapsAuthorUuid()
+    {
+        var service = new BitbucketPullRequestCommentService(new QueueRequestSender(Success("""
+            {
+              "values": [
+                {
+                  "id": 1,
+                  "content": { "raw": "hola" },
+                  "user": { "display_name": "Ana", "uuid": "{abc-123}" }
+                }
+              ]
+            }
+            """)));
+
+        var comment = Assert.Single(await service.GetAllAsync("team", "repo", 42, CancellationToken.None));
+
+        Assert.Equal("{abc-123}", comment.AuthorUuid);
+    }
+
+    private static Task RunActionAsync(BitbucketPullRequestCommentService service, string action) =>
+        action switch
+        {
+            "delete" => service.DeleteAsync("team", "repo", 42, 17, CancellationToken.None),
+            "resolve" => service.ResolveAsync("team", "repo", 42, 17, CancellationToken.None),
+            "reopen" => service.ReopenAsync("team", "repo", 42, 17, CancellationToken.None),
+            "update" => service.UpdateAsync("team", "repo", 42, 17, "editado", CancellationToken.None),
+            "create" => service.CreateAsync("team", "repo", 42, "nuevo", null, CancellationToken.None),
+            _ => throw new ArgumentOutOfRangeException(nameof(action)),
+        };
 
     private static ResponseMessage Success(string content) =>
         new(200, true, new Dictionary<string, string>(), content);
