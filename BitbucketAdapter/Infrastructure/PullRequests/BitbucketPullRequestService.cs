@@ -187,7 +187,7 @@ public sealed class BitbucketPullRequestService : IBitbucketPullRequestService
     private static Uri BuildPullRequestsEndpoint(string workspaceSlug, string repositorySlug) =>
         new(
             ApiBaseEndpoint,
-            $"2.0/repositories/{Escape(workspaceSlug)}/{Escape(repositorySlug)}/pullrequests?state=OPEN");
+            $"2.0/repositories/{Escape(workspaceSlug)}/{Escape(repositorySlug)}/pullrequests?state=OPEN&pagelen=50");
 
     private static Uri BuildPullRequestDetailEndpoint(
         string workspaceSlug,

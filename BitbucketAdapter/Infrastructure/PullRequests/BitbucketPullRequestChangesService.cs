@@ -218,7 +218,7 @@ public sealed class BitbucketPullRequestChangesService : IBitbucketPullRequestCh
         string destinationCommitHash) =>
         new(
             ApiBaseEndpoint,
-            $"2.0/repositories/{Escape(workspaceSlug)}/{Escape(repositorySlug)}/diffstat/{BuildSpec(sourceCommitHash, destinationCommitHash)}?topic=true");
+            $"2.0/repositories/{Escape(workspaceSlug)}/{Escape(repositorySlug)}/diffstat/{BuildSpec(sourceCommitHash, destinationCommitHash)}?topic=true&pagelen=500");
 
     private static Uri BuildDiffEndpoint(
         string workspaceSlug,

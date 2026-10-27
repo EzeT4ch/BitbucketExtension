@@ -31,7 +31,7 @@ public sealed class BitbucketRepositoryService : IBitbucketRepositoryService
         var visitedEndpoints = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         Uri? currentEndpoint = new(
             ApiBaseEndpoint,
-            $"2.0/repositories/{Uri.EscapeDataString(workspaceSlug.Trim())}");
+            $"2.0/repositories/{Uri.EscapeDataString(workspaceSlug.Trim())}?pagelen=100");
 
         while (currentEndpoint is not null)
         {

@@ -12,4 +12,5 @@ public sealed record BitbucketPullRequestComment(
     bool IsResolved,
     string? FilePath,
     int? FromLine,
-    int? ToLine);
+    int? ToLine,
+    string? AuthorUuid = null);

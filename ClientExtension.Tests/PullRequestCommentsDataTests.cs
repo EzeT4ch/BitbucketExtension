@@ -16,7 +16,7 @@ public sealed class PullRequestCommentsDataTests
             GetAllHandler = (_, _, _, _) => Task.FromResult<IReadOnlyList<BitbucketPullRequestComment>>(
                 [Comment(1), Comment(2), Comment(3, isDeleted: true)]),
         };
-        var data = new PullRequestCommentsData(service);
+        var data = new PullRequestCommentsData(service, new StubCurrentUserService());
         await data.LoadAsync("team", "repo", 42, CancellationToken.None);
 
         var first = data.All[0];
@@ -38,7 +38,7 @@ public sealed class PullRequestCommentsDataTests
     public async Task CancelReply_ClosesEditorAndClearsDraft()
     {
         var service = CreateServiceWith(Comment(1));
-        var data = new PullRequestCommentsData(service);
+        var data = new PullRequestCommentsData(service, new StubCurrentUserService());
         await data.LoadAsync("team", "repo", 42, CancellationToken.None);
         var item = Assert.Single(data.All);
         await item.OpenReplyCommand.ExecuteAsync(null, null!, CancellationToken.None);
@@ -61,7 +61,7 @@ public sealed class PullRequestCommentsDataTests
                 ? [Comment(17)]
                 : [Comment(17), Comment(98, parentId: 17)]);
         service.CreateReplyHandler = (_, _) => Task.FromResult(98L);
-        var data = new PullRequestCommentsData(service);
+        var data = new PullRequestCommentsData(service, new StubCurrentUserService());
         await data.LoadAsync("team", "repo", 42, CancellationToken.None);
         var item = Assert.Single(data.All);
         await item.OpenReplyCommand.ExecuteAsync(null, null!, CancellationToken.None);
@@ -86,7 +86,7 @@ public sealed class PullRequestCommentsDataTests
     {
         var service = CreateServiceWith(Comment(17));
         service.CreateReplyHandler = (_, _) => throw new BitbucketPullRequestCommentException("Forbidden");
-        var data = new PullRequestCommentsData(service);
+        var data = new PullRequestCommentsData(service, new StubCurrentUserService());
         await data.LoadAsync("team", "repo", 42, CancellationToken.None);
         var item = Assert.Single(data.All);
         await item.OpenReplyCommand.ExecuteAsync(null, null!, CancellationToken.None);
@@ -116,7 +116,7 @@ public sealed class PullRequestCommentsDataTests
                 return 98;
             },
         };
-        var data = new PullRequestCommentsData(service);
+        var data = new PullRequestCommentsData(service, new StubCurrentUserService());
         await data.LoadAsync("team", "repo", 42, CancellationToken.None);
         var oldItem = Assert.Single(data.All);
         await oldItem.OpenReplyCommand.ExecuteAsync(null, null!, CancellationToken.None);
@@ -138,7 +138,7 @@ public sealed class PullRequestCommentsDataTests
     [Fact]
     public async Task ReplyContent_WhenBlank_DisablesSendCommand()
     {
-        var data = new PullRequestCommentsData(CreateServiceWith(Comment(17)));
+        var data = new PullRequestCommentsData(CreateServiceWith(Comment(17)), new StubCurrentUserService());
         await data.LoadAsync("team", "repo", 42, CancellationToken.None);
         var item = Assert.Single(data.All);
         await item.OpenReplyCommand.ExecuteAsync(null, null!, CancellationToken.None);
@@ -148,6 +148,176 @@ public sealed class PullRequestCommentsDataTests
 
         item.ReplyContent = "content";
         Assert.True(item.SendReplyCommand.CanExecute);
+    }
+
+    [Fact]
+    public async Task Actions_OnlyOwnCommentsCanBeEditedOrDeleted()
+    {
+        var service = CreateServiceWith(
+            Comment(1, authorUuid: "me-123"),
+            Comment(2, authorUuid: "{other}"),
+            Comment(3, parentId: 1, authorUuid: StubCurrentUserService.CurrentUserUuid),
+            Comment(4, isResolved: true),
+            Comment(5, isDeleted: true, authorUuid: StubCurrentUserService.CurrentUserUuid));
+        var data = new PullRequestCommentsData(service, new StubCurrentUserService());
+
+        await data.LoadAsync("team", "repo", 42, CancellationToken.None);
+
+        var own = data.All.Single(item => item.Id == 1).Actions;
+        Assert.True(own.CanEdit);
+        Assert.True(own.CanDelete);
+        Assert.True(own.CanResolve);
+        Assert.False(own.CanReopen);
+        var foreign = data.All.Single(item => item.Id == 2).Actions;
+        Assert.False(foreign.CanEdit);
+        Assert.False(foreign.CanDelete);
+        Assert.True(foreign.CanResolve);
+        var ownReply = data.All.Single(item => item.Id == 3).Actions;
+        Assert.True(ownReply.CanEdit);
+        Assert.False(ownReply.CanResolve);
+        var resolved = data.All.Single(item => item.Id == 4).Actions;
+        Assert.False(resolved.CanResolve);
+        Assert.True(resolved.CanReopen);
+        Assert.False(data.All.Single(item => item.Id == 5).Actions.HasAnyAction);
+    }
+
+    [Fact]
+    public async Task Actions_WhenCurrentUserCannotBeLoaded_HidesEditAndDeleteButKeepsComments()
+    {
+        var service = CreateServiceWith(Comment(1, authorUuid: StubCurrentUserService.CurrentUserUuid));
+        var users = new StubCurrentUserService
+        {
+            Handler = _ => throw new InvalidOperationException("sin usuario"),
+        };
+        var data = new PullRequestCommentsData(service, users);
+
+        await data.LoadAsync("team", "repo", 42, CancellationToken.None);
+
+        var actions = Assert.Single(data.All).Actions;
+        Assert.False(actions.CanEdit);
+        Assert.True(actions.CanResolve);
+    }
+
+    [Fact]
+    public async Task CreateComment_PostsGeneralCommentClearsDraftAndReloads()
+    {
+        var service = CreateServiceWith(Comment(1));
+        var data = new PullRequestCommentsData(service, new StubCurrentUserService());
+        var changed = 0;
+        data.CommentsChanged += () => changed++;
+        await data.LoadAsync("team", "repo", 42, CancellationToken.None);
+
+        data.NewCommentContent = " ";
+        Assert.False(data.CreateCommentCommand.CanExecute);
+        data.NewCommentContent = "**nuevo**";
+        Assert.True(data.CreateCommentCommand.CanExecute);
+        await data.CreateCommentCommand.ExecuteAsync("**nuevo**", null!, CancellationToken.None);
+
+        var call = Assert.Single(service.Writes.Calls);
+        Assert.Equal("create", call.Action);
+        Assert.Equal(42, call.PullRequestId);
+        Assert.Equal("**nuevo**", call.MarkdownContent);
+        Assert.Null(call.Anchor);
+        Assert.Equal(string.Empty, data.NewCommentContent);
+        Assert.Equal(2, service.GetAllCalls.Count);
+        Assert.Equal(1, changed);
+    }
+
+    [Fact]
+    public async Task CreateComment_WhenServiceFails_KeepsDraftAndShowsError()
+    {
+        var service = CreateServiceWith(Comment(1));
+        service.Writes.Handler = _ => throw new BitbucketPullRequestCommentException("Forbidden");
+        var data = new PullRequestCommentsData(service, new StubCurrentUserService());
+        await data.LoadAsync("team", "repo", 42, CancellationToken.None);
+        data.NewCommentContent = "borrador";
+
+        await data.CreateCommentCommand.ExecuteAsync("borrador", null!, CancellationToken.None);
+
+        Assert.Equal("borrador", data.NewCommentContent);
+        Assert.Contains("Forbidden", data.NewCommentStatus);
+        Assert.True(data.CreateCommentCommand.CanExecute);
+        Assert.Single(service.GetAllCalls);
+    }
+
+    [Fact]
+    public async Task EditComment_PrefillsContentAndSavesChanges()
+    {
+        var service = CreateServiceWith(Comment(1, authorUuid: StubCurrentUserService.CurrentUserUuid));
+        var data = new PullRequestCommentsData(service, new StubCurrentUserService());
+        await data.LoadAsync("team", "repo", 42, CancellationToken.None);
+        var actions = Assert.Single(data.All).Actions;
+
+        await actions.EditCommand.ExecuteAsync(null, null!, CancellationToken.None);
+        Assert.True(actions.IsEditorOpen);
+        Assert.Equal("Comment 1", actions.EditContent);
+        actions.EditContent = "Comment 1 editado";
+        await actions.SaveEditCommand.ExecuteAsync(actions.EditContent, null!, CancellationToken.None);
+
+        var call = Assert.Single(service.Writes.Calls);
+        Assert.Equal("update", call.Action);
+        Assert.Equal(1, call.CommentId);
+        Assert.Equal("Comment 1 editado", call.MarkdownContent);
+        Assert.Equal(2, service.GetAllCalls.Count);
+    }
+
+    [Fact]
+    public async Task DeleteComment_RequiresConfirmation()
+    {
+        var service = CreateServiceWith(Comment(1, authorUuid: StubCurrentUserService.CurrentUserUuid));
+        var data = new PullRequestCommentsData(service, new StubCurrentUserService());
+        await data.LoadAsync("team", "repo", 42, CancellationToken.None);
+        var actions = Assert.Single(data.All).Actions;
+
+        await actions.DeleteCommand.ExecuteAsync(null, null!, CancellationToken.None);
+        Assert.True(actions.IsDeleteConfirmationVisible);
+        Assert.Empty(service.Writes.Calls);
+
+        await actions.CancelDeleteCommand.ExecuteAsync(null, null!, CancellationToken.None);
+        Assert.False(actions.IsDeleteConfirmationVisible);
+        Assert.Empty(service.Writes.Calls);
+
+        await actions.DeleteCommand.ExecuteAsync(null, null!, CancellationToken.None);
+        await actions.ConfirmDeleteCommand.ExecuteAsync(null, null!, CancellationToken.None);
+
+        var call = Assert.Single(service.Writes.Calls);
+        Assert.Equal("delete", call.Action);
+        Assert.Equal(1, call.CommentId);
+    }
+
+    [Theory]
+    [InlineData(false, "resolve")]
+    [InlineData(true, "reopen")]
+    public async Task ResolveAndReopen_CallExpectedOperation(bool isResolved, string expectedAction)
+    {
+        var service = CreateServiceWith(Comment(1, isResolved: isResolved));
+        var data = new PullRequestCommentsData(service, new StubCurrentUserService());
+        await data.LoadAsync("team", "repo", 42, CancellationToken.None);
+        var actions = Assert.Single(data.All).Actions;
+
+        var command = isResolved ? actions.ReopenCommand : actions.ResolveCommand;
+        await command.ExecuteAsync(null, null!, CancellationToken.None);
+
+        var call = Assert.Single(service.Writes.Calls);
+        Assert.Equal(expectedAction, call.Action);
+        Assert.Equal(1, call.CommentId);
+    }
+
+    [Fact]
+    public async Task CommentAction_WhenServiceFails_ShowsErrorWithoutReloading()
+    {
+        var service = CreateServiceWith(Comment(1));
+        service.Writes.Handler = _ => throw new BitbucketPullRequestCommentException("Forbidden");
+        var data = new PullRequestCommentsData(service, new StubCurrentUserService());
+        await data.LoadAsync("team", "repo", 42, CancellationToken.None);
+        var actions = Assert.Single(data.All).Actions;
+
+        await actions.ResolveCommand.ExecuteAsync(null, null!, CancellationToken.None);
+
+        Assert.Contains("Forbidden", actions.Status);
+        Assert.False(actions.IsBusy);
+        Assert.True(actions.ResolveCommand.CanExecute);
+        Assert.Single(service.GetAllCalls);
     }
 
     private static StubCommentService CreateServiceWith(params BitbucketPullRequestComment[] comments) =>
@@ -160,7 +330,9 @@ public sealed class PullRequestCommentsDataTests
     private static BitbucketPullRequestComment Comment(
         long id,
         long? parentId = null,
-        bool isDeleted = false) =>
+        bool isDeleted = false,
+        bool isResolved = false,
+        string? authorUuid = null) =>
         new(
             id,
             parentId,
@@ -170,13 +342,58 @@ public sealed class PullRequestCommentsDataTests
             null,
             isDeleted,
             false,
-            false,
+            isResolved,
             null,
             null,
-            null);
+            null,
+            authorUuid);
 
     private sealed class StubCommentService : IBitbucketPullRequestCommentService
     {
+        public CommentWriteRecorder Writes { get; } = new();
+
+        public Task<long> CreateAsync(
+            string workspaceSlug,
+            string repositorySlug,
+            long pullRequestId,
+            string markdownContent,
+            BitbucketPullRequestCommentAnchor? anchor,
+            CancellationToken cancellationToken) =>
+            Writes.CreateAsync(workspaceSlug, repositorySlug, pullRequestId, markdownContent, anchor);
+
+        public Task UpdateAsync(
+            string workspaceSlug,
+            string repositorySlug,
+            long pullRequestId,
+            long commentId,
+            string markdownContent,
+            CancellationToken cancellationToken) =>
+            Writes.RecordAsync("update", workspaceSlug, repositorySlug, pullRequestId, commentId, markdownContent);
+
+        public Task DeleteAsync(
+            string workspaceSlug,
+            string repositorySlug,
+            long pullRequestId,
+            long commentId,
+            CancellationToken cancellationToken) =>
+            Writes.RecordAsync("delete", workspaceSlug, repositorySlug, pullRequestId, commentId);
+
+        public Task ResolveAsync(
+            string workspaceSlug,
+            string repositorySlug,
+            long pullRequestId,
+            long commentId,
+            CancellationToken cancellationToken) =>
+            Writes.RecordAsync("resolve", workspaceSlug, repositorySlug, pullRequestId, commentId);
+
+        public Task ReopenAsync(
+            string workspaceSlug,
+            string repositorySlug,
+            long pullRequestId,
+            long commentId,
+            CancellationToken cancellationToken) =>
+            Writes.RecordAsync("reopen", workspaceSlug, repositorySlug, pullRequestId, commentId);
+
         public Task<BitbucketPullRequestCommentImage> GetImageAsync(
             string workspaceSlug,
             string repositorySlug,

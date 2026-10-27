@@ -68,7 +68,7 @@ public sealed class BitbucketPullRequestServiceTests
         Assert.Equal([3L, 2L, 1L], result.Select(pullRequest => pullRequest.Id));
         Assert.Equal(2, sender.Requests.Count);
         Assert.Equal(
-            "https://api.bitbucket.org/2.0/repositories/team/repo/pullrequests?state=OPEN",
+            "https://api.bitbucket.org/2.0/repositories/team/repo/pullrequests?state=OPEN&pagelen=50",
             sender.Requests[0].Request.Endpoint.AbsoluteUri);
         Assert.Equal(
             "https://api.bitbucket.org/2.0/repositories/team/repo/pullrequests?page=2&state=OPEN",
@@ -90,7 +90,7 @@ public sealed class BitbucketPullRequestServiceTests
 
         var request = rawSender.Requests.Single().Request;
         Assert.Equal(
-            "https://api.bitbucket.org/2.0/repositories/team%20space/repo%20name/pullrequests?state=OPEN",
+            "https://api.bitbucket.org/2.0/repositories/team%20space/repo%20name/pullrequests?state=OPEN&pagelen=50",
             request.Endpoint.AbsoluteUri);
         var credential = Assert.IsType<BearerTokenCredential>(request.Credential);
         Assert.Equal("access-token", credential.Token);

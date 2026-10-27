@@ -29,8 +29,6 @@
 
     <ItemGroup>
       <EmbeddedResource Include="Presentation\Bitbucket\PullRequests\PullRequestSelectionControl.xaml" />
-      <EmbeddedResource Include="Presentation\Bitbucket\PullRequests\Diff\PullRequestDiffControl.xaml" />
-      <EmbeddedResource Include="Presentation\Bitbucket\PullRequests\Diff\PullRequestDiffResources.xaml" />
       <EmbeddedResource Include="Presentation\Shared\Layout\RemoteUiLayout.xaml" />
     </ItemGroup>
 

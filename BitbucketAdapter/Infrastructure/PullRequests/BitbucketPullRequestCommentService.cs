@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -15,11 +16,26 @@ public sealed class BitbucketPullRequestCommentService : IBitbucketPullRequestCo
     private static readonly IReadOnlyDictionary<string, string> Headers =
         new Dictionary<string, string> { ["Accept"] = "application/json" };
 
+    private static readonly JsonSerializerOptions WriteSerializerOptions = new()
+    {
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    };
+
+    private static readonly TimeSpan CommentsCacheDuration = TimeSpan.FromSeconds(60);
+
     private readonly IHttpRequestSender _requestSender;
+    private readonly TimeProvider _timeProvider;
+    private readonly ConcurrentDictionary<string, CachedComments> _commentsCache = new(StringComparer.Ordinal);
 
     public BitbucketPullRequestCommentService(IHttpRequestSender requestSender)
+        : this(requestSender, TimeProvider.System)
+    {
+    }
+
+    public BitbucketPullRequestCommentService(IHttpRequestSender requestSender, TimeProvider timeProvider)
     {
         _requestSender = requestSender;
+        _timeProvider = timeProvider;
     }
 
     public async Task<BitbucketPullRequestCommentImage> GetImageAsync(
@@ -61,7 +77,7 @@ public sealed class BitbucketPullRequestCommentService : IBitbucketPullRequestCo
         return new BitbucketPullRequestCommentImage(content, contentType);
     }
 
-    public async Task<long> CreateReplyAsync(
+    public Task<long> CreateReplyAsync(
         string workspaceSlug,
         string repositorySlug,
         long pullRequestId,
@@ -69,34 +85,165 @@ public sealed class BitbucketPullRequestCommentService : IBitbucketPullRequestCo
         string markdownContent,
         CancellationToken cancellationToken)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceSlug);
-        ArgumentException.ThrowIfNullOrWhiteSpace(repositorySlug);
+        ValidatePullRequestContext(workspaceSlug, repositorySlug, pullRequestId);
         ArgumentException.ThrowIfNullOrWhiteSpace(markdownContent);
-        if (pullRequestId <= 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(pullRequestId));
-        }
-
-        if (parentCommentId <= 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(parentCommentId));
-        }
+        ValidateCommentId(parentCommentId, nameof(parentCommentId));
 
         var body = JsonSerializer.Serialize(new CreateReplyRequestDto(
             new ContentDto(markdownContent),
             new ParentDto(parentCommentId)));
-        var request = new RequestMessage(
+        return SendCreateAsync(
+            workspaceSlug,
+            repositorySlug,
+            pullRequestId,
+            body,
+            "Bitbucket no pudo crear la respuesta al comentario.",
+            cancellationToken);
+    }
+
+    public Task<long> CreateAsync(
+        string workspaceSlug,
+        string repositorySlug,
+        long pullRequestId,
+        string markdownContent,
+        BitbucketPullRequestCommentAnchor? anchor,
+        CancellationToken cancellationToken)
+    {
+        ValidatePullRequestContext(workspaceSlug, repositorySlug, pullRequestId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(markdownContent);
+
+        InlineDto? inline = null;
+        if (anchor is not null)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(anchor.Path);
+            if (anchor.FromLine is null && anchor.ToLine is null ||
+                anchor.FromLine is <= 0 ||
+                anchor.ToLine is <= 0)
+            {
+                throw new ArgumentException(
+                    "El comentario en línea debe indicar una línea válida.",
+                    nameof(anchor));
+            }
+
+            inline = new InlineDto(NormalizePath(anchor.Path), anchor.FromLine, anchor.ToLine);
+        }
+
+        var body = JsonSerializer.Serialize(
+            new CreateCommentRequestDto(new ContentDto(markdownContent), inline),
+            WriteSerializerOptions);
+        return SendCreateAsync(
+            workspaceSlug,
+            repositorySlug,
+            pullRequestId,
+            body,
+            "Bitbucket no pudo crear el comentario.",
+            cancellationToken);
+    }
+
+    public Task UpdateAsync(
+        string workspaceSlug,
+        string repositorySlug,
+        long pullRequestId,
+        long commentId,
+        string markdownContent,
+        CancellationToken cancellationToken)
+    {
+        ValidatePullRequestContext(workspaceSlug, repositorySlug, pullRequestId);
+        ValidateCommentId(commentId, nameof(commentId));
+        ArgumentException.ThrowIfNullOrWhiteSpace(markdownContent);
+
+        var body = JsonSerializer.Serialize(new UpdateCommentRequestDto(new ContentDto(markdownContent)));
+        return SendWriteAsync(
+            workspaceSlug,
+            repositorySlug,
+            pullRequestId,
+            HttpMethodType.Put,
+            BuildCommentEndpoint(workspaceSlug, repositorySlug, pullRequestId, commentId),
+            body,
+            "Bitbucket no pudo editar el comentario.",
+            cancellationToken);
+    }
+
+    public Task DeleteAsync(
+        string workspaceSlug,
+        string repositorySlug,
+        long pullRequestId,
+        long commentId,
+        CancellationToken cancellationToken)
+    {
+        ValidatePullRequestContext(workspaceSlug, repositorySlug, pullRequestId);
+        ValidateCommentId(commentId, nameof(commentId));
+
+        return SendWriteAsync(
+            workspaceSlug,
+            repositorySlug,
+            pullRequestId,
+            HttpMethodType.Delete,
+            BuildCommentEndpoint(workspaceSlug, repositorySlug, pullRequestId, commentId),
+            null,
+            "Bitbucket no pudo eliminar el comentario.",
+            cancellationToken);
+    }
+
+    public Task ResolveAsync(
+        string workspaceSlug,
+        string repositorySlug,
+        long pullRequestId,
+        long commentId,
+        CancellationToken cancellationToken)
+    {
+        ValidatePullRequestContext(workspaceSlug, repositorySlug, pullRequestId);
+        ValidateCommentId(commentId, nameof(commentId));
+
+        return SendWriteAsync(
+            workspaceSlug,
+            repositorySlug,
+            pullRequestId,
+            HttpMethodType.Post,
+            BuildResolveEndpoint(workspaceSlug, repositorySlug, pullRequestId, commentId),
+            null,
+            "Bitbucket no pudo resolver el comentario.",
+            cancellationToken);
+    }
+
+    public Task ReopenAsync(
+        string workspaceSlug,
+        string repositorySlug,
+        long pullRequestId,
+        long commentId,
+        CancellationToken cancellationToken)
+    {
+        ValidatePullRequestContext(workspaceSlug, repositorySlug, pullRequestId);
+        ValidateCommentId(commentId, nameof(commentId));
+
+        return SendWriteAsync(
+            workspaceSlug,
+            repositorySlug,
+            pullRequestId,
+            HttpMethodType.Delete,
+            BuildResolveEndpoint(workspaceSlug, repositorySlug, pullRequestId, commentId),
+            null,
+            "Bitbucket no pudo reabrir el comentario.",
+            cancellationToken);
+    }
+
+    private async Task<long> SendCreateAsync(
+        string workspaceSlug,
+        string repositorySlug,
+        long pullRequestId,
+        string body,
+        string errorMessage,
+        CancellationToken cancellationToken)
+    {
+        var response = await SendWriteRequestAsync(
+            workspaceSlug,
+            repositorySlug,
+            pullRequestId,
             HttpMethodType.Post,
             BuildCommentsEndpoint(workspaceSlug, repositorySlug, pullRequestId),
-            Headers: Headers,
-            Body: new RequestBody("application/json", body));
-        var response = await _requestSender.SendAsync(request, cancellationToken);
-
-        if (!response.IsSuccessStatusCode)
-        {
-            throw new BitbucketPullRequestCommentException(
-                $"Bitbucket no pudo crear la respuesta al comentario. Status: {response.StatusCode}.");
-        }
+            body,
+            errorMessage,
+            cancellationToken);
 
         if (string.IsNullOrWhiteSpace(response.Content))
         {
@@ -106,14 +253,14 @@ public sealed class BitbucketPullRequestCommentService : IBitbucketPullRequestCo
 
         try
         {
-            var createdReply = JsonSerializer.Deserialize<CreateReplyResponseDto>(response.Content);
-            if (createdReply?.Id is null or <= 0)
+            var createdComment = JsonSerializer.Deserialize<CreateReplyResponseDto>(response.Content);
+            if (createdComment?.Id is null or <= 0)
             {
                 throw new BitbucketPullRequestCommentException(
                     "La respuesta de Bitbucket no contiene un identificador de comentario válido.");
             }
 
-            return createdReply.Id.Value;
+            return createdComment.Id.Value;
         }
         catch (JsonException exception)
         {
@@ -121,6 +268,53 @@ public sealed class BitbucketPullRequestCommentService : IBitbucketPullRequestCo
                 "No se pudo interpretar la respuesta de Bitbucket al crear el comentario.",
                 exception);
         }
+    }
+
+    private async Task SendWriteAsync(
+        string workspaceSlug,
+        string repositorySlug,
+        long pullRequestId,
+        HttpMethodType method,
+        Uri endpoint,
+        string? body,
+        string errorMessage,
+        CancellationToken cancellationToken)
+    {
+        await SendWriteRequestAsync(
+            workspaceSlug,
+            repositorySlug,
+            pullRequestId,
+            method,
+            endpoint,
+            body,
+            errorMessage,
+            cancellationToken);
+    }
+
+    private async Task<ResponseMessage> SendWriteRequestAsync(
+        string workspaceSlug,
+        string repositorySlug,
+        long pullRequestId,
+        HttpMethodType method,
+        Uri endpoint,
+        string? body,
+        string errorMessage,
+        CancellationToken cancellationToken)
+    {
+        var request = new RequestMessage(
+            method,
+            endpoint,
+            Headers: Headers,
+            Body: body is null ? null : new RequestBody("application/json", body));
+        var response = await _requestSender.SendAsync(request, cancellationToken);
+        _commentsCache.TryRemove(BuildCacheKey(workspaceSlug, repositorySlug, pullRequestId), out _);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new BitbucketPullRequestCommentException($"{errorMessage} Status: {response.StatusCode}.");
+        }
+
+        return response;
     }
 
     public async Task<IReadOnlyList<BitbucketPullRequestComment>> GetAllAsync(
@@ -136,8 +330,10 @@ public sealed class BitbucketPullRequestCommentService : IBitbucketPullRequestCo
             throw new ArgumentOutOfRangeException(nameof(pullRequestId));
         }
 
-        var commentsById = await GetCommentsByIdAsync(
-            BuildCommentsEndpoint(workspaceSlug, repositorySlug, pullRequestId),
+        var commentsById = await GetCachedCommentsByIdAsync(
+            workspaceSlug,
+            repositorySlug,
+            pullRequestId,
             cancellationToken);
 
         return commentsById.Values
@@ -163,8 +359,10 @@ public sealed class BitbucketPullRequestCommentService : IBitbucketPullRequestCo
         }
 
         var normalizedFilePath = NormalizePath(filePath);
-        var commentsById = await GetCommentsByIdAsync(
-            BuildCommentsEndpoint(workspaceSlug, repositorySlug, pullRequestId),
+        var commentsById = await GetCachedCommentsByIdAsync(
+            workspaceSlug,
+            repositorySlug,
+            pullRequestId,
             cancellationToken);
 
         var mappedComments = commentsById.Values
@@ -197,6 +395,26 @@ public sealed class BitbucketPullRequestCommentService : IBitbucketPullRequestCo
             .ThenBy(item => item.Comment.Id)
             .Select(item => item.Comment)
             .ToArray();
+    }
+
+    private async Task<IReadOnlyDictionary<long, PullRequestCommentDto>> GetCachedCommentsByIdAsync(
+        string workspaceSlug,
+        string repositorySlug,
+        long pullRequestId,
+        CancellationToken cancellationToken)
+    {
+        var cacheKey = BuildCacheKey(workspaceSlug, repositorySlug, pullRequestId);
+        var now = _timeProvider.GetUtcNow();
+        if (_commentsCache.TryGetValue(cacheKey, out var cached) && cached.ExpiresAt > now)
+        {
+            return cached.CommentsById;
+        }
+
+        var commentsById = await GetCommentsByIdAsync(
+            BuildCommentsListEndpoint(workspaceSlug, repositorySlug, pullRequestId),
+            cancellationToken);
+        _commentsCache[cacheKey] = new CachedComments(commentsById, now + CommentsCacheDuration);
+        return commentsById;
     }
 
     private async Task<Dictionary<long, PullRequestCommentDto>> GetCommentsByIdAsync(
@@ -298,7 +516,8 @@ public sealed class BitbucketPullRequestCommentService : IBitbucketPullRequestCo
             IsThreadResolved(comment, commentsById),
             inline?.Path?.Trim(),
             inline?.From,
-            inline?.To);
+            inline?.To,
+            string.IsNullOrWhiteSpace(comment.User?.Uuid) ? null : comment.User.Uuid.Trim());
     }
 
     private static void ValidateImageUri(
@@ -438,6 +657,50 @@ public sealed class BitbucketPullRequestCommentService : IBitbucketPullRequestCo
             ApiBaseEndpoint,
             $"2.0/repositories/{Escape(workspaceSlug)}/{Escape(repositorySlug)}/pullrequests/{pullRequestId.ToString(CultureInfo.InvariantCulture)}/comments");
 
+    private static Uri BuildCommentEndpoint(
+        string workspaceSlug,
+        string repositorySlug,
+        long pullRequestId,
+        long commentId) =>
+        new($"{BuildCommentsEndpoint(workspaceSlug, repositorySlug, pullRequestId).AbsoluteUri}/{commentId.ToString(CultureInfo.InvariantCulture)}");
+
+    private static Uri BuildResolveEndpoint(
+        string workspaceSlug,
+        string repositorySlug,
+        long pullRequestId,
+        long commentId) =>
+        new($"{BuildCommentEndpoint(workspaceSlug, repositorySlug, pullRequestId, commentId).AbsoluteUri}/resolve");
+
+    private static void ValidatePullRequestContext(
+        string workspaceSlug,
+        string repositorySlug,
+        long pullRequestId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceSlug);
+        ArgumentException.ThrowIfNullOrWhiteSpace(repositorySlug);
+        if (pullRequestId <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(pullRequestId));
+        }
+    }
+
+    private static void ValidateCommentId(long commentId, string parameterName)
+    {
+        if (commentId <= 0)
+        {
+            throw new ArgumentOutOfRangeException(parameterName);
+        }
+    }
+
+    private static Uri BuildCommentsListEndpoint(
+        string workspaceSlug,
+        string repositorySlug,
+        long pullRequestId) =>
+        new($"{BuildCommentsEndpoint(workspaceSlug, repositorySlug, pullRequestId).AbsoluteUri}?pagelen=100");
+
+    private static string BuildCacheKey(string workspaceSlug, string repositorySlug, long pullRequestId) =>
+        $"{workspaceSlug.Trim().ToLowerInvariant()}/{repositorySlug.Trim().ToLowerInvariant()}/{pullRequestId.ToString(CultureInfo.InvariantCulture)}";
+
     private static Uri? ParseNextEndpoint(string? next)
     {
         if (string.IsNullOrWhiteSpace(next))
@@ -473,6 +736,13 @@ public sealed class BitbucketPullRequestCommentService : IBitbucketPullRequestCo
         [property: JsonPropertyName("content")] ContentDto Content,
         [property: JsonPropertyName("parent")] ParentDto Parent);
 
+    private sealed record CreateCommentRequestDto(
+        [property: JsonPropertyName("content")] ContentDto Content,
+        [property: JsonPropertyName("inline")] InlineDto? Inline);
+
+    private sealed record UpdateCommentRequestDto(
+        [property: JsonPropertyName("content")] ContentDto Content);
+
     private sealed record CreateReplyResponseDto(
         [property: JsonPropertyName("id")] long? Id);
 
@@ -500,9 +770,14 @@ public sealed class BitbucketPullRequestCommentService : IBitbucketPullRequestCo
         [property: JsonPropertyName("to")] int? To);
 
     private sealed record AccountDto(
-        [property: JsonPropertyName("display_name")] string? DisplayName);
+        [property: JsonPropertyName("display_name")] string? DisplayName,
+        [property: JsonPropertyName("uuid")] string? Uuid);
 
     private sealed class ResolutionDto
     {
     }
+
+    private sealed record CachedComments(
+        IReadOnlyDictionary<long, PullRequestCommentDto> CommentsById,
+        DateTimeOffset ExpiresAt);
 }

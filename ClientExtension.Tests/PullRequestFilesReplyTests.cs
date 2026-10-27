@@ -52,7 +52,7 @@ public sealed class PullRequestFilesReplyTests
     [Fact]
     public async Task LoadInlineComment_WhenImageDownloadFails_ShowsFallbackInsteadOfEmptyFrame()
     {
-        const string imageUrl = "https://bitbucket.org/team/repo/images/123-image.png";
+        const string imageUrl = "https://bitbucket.org/team/repo/images/456-unavailable.png";
         var comments = new StubCommentService
         {
             GetFileCommentsHandler = (_, _, _, _, _) =>
@@ -153,8 +153,92 @@ public sealed class PullRequestFilesReplyTests
         Assert.Single(comments.GetFileCommentsCalls);
     }
 
+    [Theory]
+    [InlineData("Added", null, 1)]
+    [InlineData("Removed", 1, null)]
+    public async Task SendInlineComment_AnchorsToTheSideOfTheChangedLine(
+        string changeType,
+        int? expectedFromLine,
+        int? expectedToLine)
+    {
+        var comments = new StubCommentService
+        {
+            GetFileCommentsHandler = (_, _, _, _, _) =>
+                Task.FromResult<IReadOnlyList<BitbucketPullRequestComment>>([Comment(17)]),
+        };
+        var data = CreateData(comments);
+        var changed = 0;
+        data.CommentsChanged += () => changed++;
+        await LoadFileAsync(data);
+        var row = Assert.Single(data.DiffRows, item => item.RowType == "Code" && item.ChangeType == changeType);
+        Assert.True(row.CanAddComment);
+
+        await row.OpenCommentCommand!.ExecuteAsync(null, null!, CancellationToken.None);
+        Assert.True(row.IsCommentEditorOpen);
+        row.NewCommentContent = "comentario en línea";
+        await row.SendCommentCommand!.ExecuteAsync(row.NewCommentContent, null!, CancellationToken.None);
+        await WaitUntilAsync(() => comments.GetFileCommentsCalls.Count == 2);
+
+        var call = Assert.Single(comments.Writes.Calls);
+        Assert.Equal("create", call.Action);
+        Assert.Equal("comentario en línea", call.MarkdownContent);
+        Assert.Equal(new BitbucketPullRequestCommentAnchor(FilePath, expectedFromLine, expectedToLine), call.Anchor);
+        Assert.Equal(1, changed);
+    }
+
+    [Fact]
+    public async Task OpenInlineComment_ClosesOpenReplyEditor()
+    {
+        var comments = new StubCommentService
+        {
+            GetFileCommentsHandler = (_, _, _, _, _) =>
+                Task.FromResult<IReadOnlyList<BitbucketPullRequestComment>>([Comment(17)]),
+        };
+        var data = CreateData(comments);
+        await LoadFileAsync(data);
+        var commentRow = Assert.Single(data.DiffRows, item => item.CommentId == 17);
+        var codeRow = data.DiffRows.First(item => item.CanAddComment);
+        await commentRow.OpenReplyCommand!.ExecuteAsync(null, null!, CancellationToken.None);
+        commentRow.ReplyContent = "draft";
+
+        await codeRow.OpenCommentCommand!.ExecuteAsync(null, null!, CancellationToken.None);
+
+        Assert.False(commentRow.IsReplyEditorOpen);
+        Assert.Equal(string.Empty, commentRow.ReplyContent);
+        Assert.True(codeRow.IsCommentEditorOpen);
+    }
+
+    [Fact]
+    public async Task DiffCommentActions_ResolveReloadsDiffAndNotifies()
+    {
+        var comments = new StubCommentService
+        {
+            GetFileCommentsHandler = (_, _, _, _, _) =>
+                Task.FromResult<IReadOnlyList<BitbucketPullRequestComment>>(
+                    [Comment(17, authorUuid: StubCurrentUserService.CurrentUserUuid), Comment(18, parentId: 17)]),
+        };
+        var data = CreateData(comments);
+        var changed = 0;
+        data.CommentsChanged += () => changed++;
+        await LoadFileAsync(data);
+        var row = Assert.Single(data.DiffRows, item => item.CommentId == 17);
+        var reply = Assert.Single(row.Replies);
+        Assert.True(row.Actions!.CanEdit);
+        Assert.True(row.Actions.CanResolve);
+        Assert.False(reply.Actions!.CanEdit);
+        Assert.False(reply.Actions.CanResolve);
+
+        await row.Actions.ResolveCommand.ExecuteAsync(null, null!, CancellationToken.None);
+        await WaitUntilAsync(() => comments.GetFileCommentsCalls.Count == 2);
+
+        var call = Assert.Single(comments.Writes.Calls);
+        Assert.Equal("resolve", call.Action);
+        Assert.Equal(17, call.CommentId);
+        Assert.Equal(1, changed);
+    }
+
     private static PullRequestFilesData CreateData(StubCommentService comments) =>
-        new(new StubChangesService(), comments, new StubDiffDocumentService());
+        new(new StubChangesService(), comments, new StubCurrentUserService(), new StubDiffDocumentService());
 
     private static async Task LoadFileAsync(PullRequestFilesData data)
     {
@@ -197,7 +281,8 @@ public sealed class PullRequestFilesReplyTests
     private static BitbucketPullRequestComment Comment(
         long id,
         long? parentId = null,
-        string? content = null) =>
+        string? content = null,
+        string? authorUuid = null) =>
         new(
             id,
             parentId,
@@ -210,7 +295,8 @@ public sealed class PullRequestFilesReplyTests
             false,
             FilePath,
             null,
-            1);
+            1,
+            authorUuid);
 
     private sealed class StubChangesService : IBitbucketPullRequestChangesService
     {
@@ -249,6 +335,50 @@ public sealed class PullRequestFilesReplyTests
 
     private sealed class StubCommentService : IBitbucketPullRequestCommentService
     {
+        public CommentWriteRecorder Writes { get; } = new();
+
+        public Task<long> CreateAsync(
+            string workspaceSlug,
+            string repositorySlug,
+            long pullRequestId,
+            string markdownContent,
+            BitbucketPullRequestCommentAnchor? anchor,
+            CancellationToken cancellationToken) =>
+            Writes.CreateAsync(workspaceSlug, repositorySlug, pullRequestId, markdownContent, anchor);
+
+        public Task UpdateAsync(
+            string workspaceSlug,
+            string repositorySlug,
+            long pullRequestId,
+            long commentId,
+            string markdownContent,
+            CancellationToken cancellationToken) =>
+            Writes.RecordAsync("update", workspaceSlug, repositorySlug, pullRequestId, commentId, markdownContent);
+
+        public Task DeleteAsync(
+            string workspaceSlug,
+            string repositorySlug,
+            long pullRequestId,
+            long commentId,
+            CancellationToken cancellationToken) =>
+            Writes.RecordAsync("delete", workspaceSlug, repositorySlug, pullRequestId, commentId);
+
+        public Task ResolveAsync(
+            string workspaceSlug,
+            string repositorySlug,
+            long pullRequestId,
+            long commentId,
+            CancellationToken cancellationToken) =>
+            Writes.RecordAsync("resolve", workspaceSlug, repositorySlug, pullRequestId, commentId);
+
+        public Task ReopenAsync(
+            string workspaceSlug,
+            string repositorySlug,
+            long pullRequestId,
+            long commentId,
+            CancellationToken cancellationToken) =>
+            Writes.RecordAsync("reopen", workspaceSlug, repositorySlug, pullRequestId, commentId);
+
         public Func<string, string, long, string, CancellationToken,
             Task<IReadOnlyList<BitbucketPullRequestComment>>> GetFileCommentsHandler
         { get; set; } =

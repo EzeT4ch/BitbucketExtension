@@ -18,6 +18,43 @@ public interface IBitbucketPullRequestCommentService
         string markdownContent,
         CancellationToken cancellationToken);
 
+    Task<long> CreateAsync(
+        string workspaceSlug,
+        string repositorySlug,
+        long pullRequestId,
+        string markdownContent,
+        BitbucketPullRequestCommentAnchor? anchor,
+        CancellationToken cancellationToken);
+
+    Task UpdateAsync(
+        string workspaceSlug,
+        string repositorySlug,
+        long pullRequestId,
+        long commentId,
+        string markdownContent,
+        CancellationToken cancellationToken);
+
+    Task DeleteAsync(
+        string workspaceSlug,
+        string repositorySlug,
+        long pullRequestId,
+        long commentId,
+        CancellationToken cancellationToken);
+
+    Task ResolveAsync(
+        string workspaceSlug,
+        string repositorySlug,
+        long pullRequestId,
+        long commentId,
+        CancellationToken cancellationToken);
+
+    Task ReopenAsync(
+        string workspaceSlug,
+        string repositorySlug,
+        long pullRequestId,
+        long commentId,
+        CancellationToken cancellationToken);
+
     Task<IReadOnlyList<BitbucketPullRequestComment>> GetAllAsync(
         string workspaceSlug,
         string repositorySlug,

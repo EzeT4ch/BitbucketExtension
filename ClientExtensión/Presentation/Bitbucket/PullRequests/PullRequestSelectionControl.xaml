@@ -4,6 +4,138 @@
               xmlns:colors="clr-namespace:Microsoft.VisualStudio.PlatformUI;assembly=Microsoft.VisualStudio.Shell.15.0"
               xmlns:vs="http://schemas.microsoft.com/visualstudio/extensibility/2022/xaml">
     <DataTemplate.Resources>
+        <DataTemplate x:Key="CommentActionsTemplate">
+            <StackPanel>
+                <WrapPanel>
+                    <Button Margin="0,0,8,0"
+                            Content="Editar"
+                            Command="{Binding EditCommand}">
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding CanEdit}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                    <Button Margin="0,0,8,0"
+                            Content="Eliminar"
+                            Command="{Binding DeleteCommand}">
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding CanDelete}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                    <Button Margin="0,0,8,0"
+                            Content="Resolver"
+                            Command="{Binding ResolveCommand}">
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding CanResolve}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                    <Button Margin="0,0,8,0"
+                            Content="Reabrir"
+                            Command="{Binding ReopenCommand}">
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding CanReopen}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                </WrapPanel>
+
+                <Border Margin="0,8,0,0"
+                        Padding="10"
+                        BorderThickness="1"
+                        BorderBrush="{DynamicResource {x:Static colors:EnvironmentColors.ToolWindowValidationErrorTextBrushKey}}"
+                        CornerRadius="3">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsDeleteConfirmationVisible}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <StackPanel>
+                        <TextBlock TextWrapping="Wrap"
+                                   Text="¿Eliminar este comentario? Esta acción no se puede deshacer." />
+                        <WrapPanel Margin="0,8,0,0">
+                            <Button Content="Confirmar eliminación"
+                                    Command="{Binding ConfirmDeleteCommand}" />
+                            <Button Margin="8,0,0,0"
+                                    Content="Cancelar"
+                                    Command="{Binding CancelDeleteCommand}" />
+                        </WrapPanel>
+                    </StackPanel>
+                </Border>
+
+                <Border Margin="0,8,0,0"
+                        Padding="10"
+                        BorderThickness="1"
+                        BorderBrush="{DynamicResource {x:Static styles:VsBrushes.ControlOutlineKey}}"
+                        CornerRadius="3">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsEditorOpen}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <StackPanel>
+                        <TextBlock FontWeight="SemiBold"
+                                   Text="Editar comentario (Markdown)" />
+                        <TextBox MinHeight="82"
+                                 Margin="0,7,0,0"
+                                 Padding="7"
+                                 AcceptsReturn="True"
+                                 TextWrapping="Wrap"
+                                 VerticalScrollBarVisibility="Auto"
+                                 Text="{Binding EditContent, Mode=TwoWay}" />
+                        <WrapPanel Margin="0,8,0,0">
+                            <Button Content="Guardar"
+                                    Command="{Binding SaveEditCommand}"
+                                    CommandParameter="{Binding EditContent}" />
+                            <Button Margin="8,0,0,0"
+                                    Content="Cancelar"
+                                    Command="{Binding CancelEditCommand}" />
+                        </WrapPanel>
+                    </StackPanel>
+                </Border>
+
+                <TextBlock Margin="0,6,0,0"
+                           Style="{DynamicResource Layout.StatusText}"
+                           TextWrapping="Wrap"
+                           Text="{Binding Status}" />
+            </StackPanel>
+        </DataTemplate>
+
         <DataTemplate x:Key="PullRequestCommentTemplate">
             <Border Margin="0,0,0,10"
                     Padding="12"
@@ -77,6 +209,10 @@
                             </Style>
                         </Button.Style>
                     </Button>
+
+                    <ContentControl Margin="35,8,0,0"
+                                    Content="{Binding Actions}"
+                                    ContentTemplate="{StaticResource CommentActionsTemplate}" />
 
                     <Border Margin="35,10,0,0"
                             Padding="10"
@@ -420,85 +556,158 @@
                                                                 </Style.Triggers>
                                                             </Style>
                                                         </Border.Style>
-                                                        <Grid>
-                                                            <Grid.ColumnDefinitions>
-                                                                <ColumnDefinition Width="52" />
-                                                                <ColumnDefinition Width="52" />
-                                                                <ColumnDefinition Width="24" />
-                                                                <ColumnDefinition Width="Auto" />
-                                                            </Grid.ColumnDefinitions>
+                                                        <StackPanel>
+                                                            <Grid>
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="24" />
+                                                                    <ColumnDefinition Width="52" />
+                                                                    <ColumnDefinition Width="52" />
+                                                                    <ColumnDefinition Width="24" />
+                                                                    <ColumnDefinition Width="Auto" />
+                                                                </Grid.ColumnDefinitions>
 
-                                                            <TextBlock Padding="8,1"
-                                                                       HorizontalAlignment="Right"
-                                                                       FontFamily="Consolas"
-                                                                       FontSize="11"
-                                                                       Opacity="0.55"
-                                                                       Text="{Binding BeforeLineText}" />
-                                                            <TextBlock Grid.Column="1"
-                                                                       Padding="8,1"
-                                                                       HorizontalAlignment="Right"
-                                                                       FontFamily="Consolas"
-                                                                       FontSize="11"
-                                                                       Opacity="0.55"
-                                                                       Text="{Binding AfterLineText}" />
-                                                            <TextBlock Grid.Column="2"
-                                                                       Padding="6,1,0,1"
-                                                                       FontFamily="Consolas"
-                                                                       FontSize="12"
-                                                                       FontWeight="SemiBold"
-                                                                       Text="{Binding Marker}" />
-                                                            <ItemsControl Grid.Column="3"
-                                                                          Margin="4,1,16,1"
-                                                                          ItemsSource="{Binding Tokens}">
-                                                                <ItemsControl.ItemsPanel>
-                                                                    <ItemsPanelTemplate>
-                                                                        <StackPanel Orientation="Horizontal" />
-                                                                    </ItemsPanelTemplate>
-                                                                </ItemsControl.ItemsPanel>
-                                                                <ItemsControl.ItemTemplate>
-                                                                    <DataTemplate>
-                                                                        <TextBlock FontFamily="Consolas"
-                                                                                   FontSize="12"
-                                                                                   TextWrapping="NoWrap"
-                                                                                   Text="{Binding Text}">
-                                                                            <TextBlock.Style>
-                                                                                <Style TargetType="TextBlock">
-                                                                                    <Setter Property="Foreground"
-                                                                                            Value="{DynamicResource {x:Static styles:VsBrushes.WindowTextKey}}" />
-                                                                                    <Style.Triggers>
-                                                                                        <DataTrigger Binding="{Binding Classification}" Value="Keyword">
-                                                                                            <Setter Property="Foreground"
-                                                                                                    Value="{DynamicResource {x:Static styles:VsBrushes.WindowTextKey}}" />
-                                                                                            <Setter Property="FontWeight" Value="SemiBold" />
-                                                                                        </DataTrigger>
-                                                                                        <DataTrigger Binding="{Binding Classification}" Value="String">
-                                                                                            <Setter Property="Foreground"
-                                                                                                    Value="{DynamicResource {x:Static colors:EnvironmentColors.ToolWindowValidationErrorTextBrushKey}}" />
-                                                                                        </DataTrigger>
-                                                                                        <DataTrigger Binding="{Binding Classification}" Value="Number">
-                                                                                            <Setter Property="Foreground"
-                                                                                                    Value="{DynamicResource {x:Static styles:VsBrushes.WindowTextKey}}" />
-                                                                                        </DataTrigger>
-                                                                                        <DataTrigger Binding="{Binding Classification}" Value="Comment">
-                                                                                            <Setter Property="Foreground"
-                                                                                                    Value="{DynamicResource {x:Static colors:EnvironmentColors.ClassDesignerCommentTextBrushKey}}" />
-                                                                                        </DataTrigger>
-                                                                                        <DataTrigger Binding="{Binding Classification}" Value="Preprocessor">
-                                                                                            <Setter Property="Foreground"
-                                                                                                    Value="{DynamicResource {x:Static colors:EnvironmentColors.SystemGrayTextBrushKey}}" />
-                                                                                        </DataTrigger>
-                                                                                        <DataTrigger Binding="{Binding Classification}" Value="Type">
-                                                                                            <Setter Property="Foreground"
-                                                                                                    Value="{DynamicResource {x:Static colors:EnvironmentColors.ControlLinkTextBrushKey}}" />
-                                                                                        </DataTrigger>
-                                                                                    </Style.Triggers>
-                                                                                </Style>
-                                                                            </TextBlock.Style>
-                                                                        </TextBlock>
-                                                                    </DataTemplate>
-                                                                </ItemsControl.ItemTemplate>
-                                                            </ItemsControl>
-                                                        </Grid>
+                                                                <Button Width="20"
+                                                                        Height="18"
+                                                                        Padding="0"
+                                                                        Content="+"
+                                                                        FontWeight="SemiBold"
+                                                                        ToolTip="Comentar esta línea"
+                                                                        Command="{Binding OpenCommentCommand}">
+                                                                    <Button.Style>
+                                                                        <Style TargetType="Button">
+                                                                            <Setter Property="Visibility" Value="Hidden" />
+                                                                            <Style.Triggers>
+                                                                                <MultiDataTrigger>
+                                                                                    <MultiDataTrigger.Conditions>
+                                                                                        <Condition Binding="{Binding CanAddComment}" Value="True" />
+                                                                                        <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type ListBoxItem}}}" Value="True" />
+                                                                                    </MultiDataTrigger.Conditions>
+                                                                                    <Setter Property="Visibility" Value="Visible" />
+                                                                                </MultiDataTrigger>
+                                                                                <DataTrigger Binding="{Binding IsCommentEditorOpen}" Value="True">
+                                                                                    <Setter Property="Visibility" Value="Visible" />
+                                                                                </DataTrigger>
+                                                                            </Style.Triggers>
+                                                                        </Style>
+                                                                    </Button.Style>
+                                                                </Button>
+                                                                <TextBlock Grid.Column="1"
+                                                                           Padding="8,1"
+                                                                           HorizontalAlignment="Right"
+                                                                           FontFamily="Consolas"
+                                                                           FontSize="11"
+                                                                           Opacity="0.55"
+                                                                           Text="{Binding BeforeLineText}" />
+                                                                <TextBlock Grid.Column="2"
+                                                                           Padding="8,1"
+                                                                           HorizontalAlignment="Right"
+                                                                           FontFamily="Consolas"
+                                                                           FontSize="11"
+                                                                           Opacity="0.55"
+                                                                           Text="{Binding AfterLineText}" />
+                                                                <TextBlock Grid.Column="3"
+                                                                           Padding="6,1,0,1"
+                                                                           FontFamily="Consolas"
+                                                                           FontSize="12"
+                                                                           FontWeight="SemiBold"
+                                                                           Text="{Binding Marker}" />
+                                                                <ItemsControl Grid.Column="4"
+                                                                              Margin="4,1,16,1"
+                                                                              ItemsSource="{Binding Tokens}">
+                                                                    <ItemsControl.ItemsPanel>
+                                                                        <ItemsPanelTemplate>
+                                                                            <StackPanel Orientation="Horizontal" />
+                                                                        </ItemsPanelTemplate>
+                                                                    </ItemsControl.ItemsPanel>
+                                                                    <ItemsControl.ItemTemplate>
+                                                                        <DataTemplate>
+                                                                            <TextBlock FontFamily="Consolas"
+                                                                                       FontSize="12"
+                                                                                       TextWrapping="NoWrap"
+                                                                                       Text="{Binding Text}">
+                                                                                <TextBlock.Style>
+                                                                                    <Style TargetType="TextBlock">
+                                                                                        <Setter Property="Foreground"
+                                                                                                Value="{DynamicResource {x:Static styles:VsBrushes.WindowTextKey}}" />
+                                                                                        <Style.Triggers>
+                                                                                            <DataTrigger Binding="{Binding Classification}" Value="Keyword">
+                                                                                                <Setter Property="Foreground"
+                                                                                                        Value="{DynamicResource {x:Static styles:VsBrushes.WindowTextKey}}" />
+                                                                                                <Setter Property="FontWeight" Value="SemiBold" />
+                                                                                            </DataTrigger>
+                                                                                            <DataTrigger Binding="{Binding Classification}" Value="String">
+                                                                                                <Setter Property="Foreground"
+                                                                                                        Value="{DynamicResource {x:Static colors:EnvironmentColors.ToolWindowValidationErrorTextBrushKey}}" />
+                                                                                            </DataTrigger>
+                                                                                            <DataTrigger Binding="{Binding Classification}" Value="Number">
+                                                                                                <Setter Property="Foreground"
+                                                                                                        Value="{DynamicResource {x:Static styles:VsBrushes.WindowTextKey}}" />
+                                                                                            </DataTrigger>
+                                                                                            <DataTrigger Binding="{Binding Classification}" Value="Comment">
+                                                                                                <Setter Property="Foreground"
+                                                                                                        Value="{DynamicResource {x:Static colors:EnvironmentColors.ClassDesignerCommentTextBrushKey}}" />
+                                                                                            </DataTrigger>
+                                                                                            <DataTrigger Binding="{Binding Classification}" Value="Preprocessor">
+                                                                                                <Setter Property="Foreground"
+                                                                                                        Value="{DynamicResource {x:Static colors:EnvironmentColors.SystemGrayTextBrushKey}}" />
+                                                                                            </DataTrigger>
+                                                                                            <DataTrigger Binding="{Binding Classification}" Value="Type">
+                                                                                                <Setter Property="Foreground"
+                                                                                                        Value="{DynamicResource {x:Static colors:EnvironmentColors.ControlLinkTextBrushKey}}" />
+                                                                                            </DataTrigger>
+                                                                                        </Style.Triggers>
+                                                                                    </Style>
+                                                                                </TextBlock.Style>
+                                                                            </TextBlock>
+                                                                        </DataTemplate>
+                                                                    </ItemsControl.ItemTemplate>
+                                                                </ItemsControl>
+                                                            </Grid>
+                                                        <Border Width="560"
+                                                                Margin="152,6,16,8"
+                                                                Padding="10"
+                                                                HorizontalAlignment="Left"
+                                                                BorderThickness="1"
+                                                                BorderBrush="{DynamicResource {x:Static colors:EnvironmentColors.AccentMediumBrushKey}}"
+                                                                Background="{DynamicResource {x:Static styles:VsBrushes.ToolWindowBackgroundKey}}"
+                                                                CornerRadius="3">
+                                                            <Border.Style>
+                                                                <Style TargetType="Border">
+                                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding IsCommentEditorOpen}" Value="True">
+                                                                            <Setter Property="Visibility" Value="Visible" />
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </Border.Style>
+                                                            <StackPanel>
+                                                                <TextBlock FontWeight="SemiBold"
+                                                                           Text="Comentario en línea (Markdown)" />
+                                                                <TextBox MinHeight="64"
+                                                                         Margin="0,7,0,0"
+                                                                         Padding="7"
+                                                                         AcceptsReturn="True"
+                                                                         TextWrapping="Wrap"
+                                                                         VerticalScrollBarVisibility="Auto"
+                                                                         Text="{Binding NewCommentContent, Mode=TwoWay}" />
+                                                                <TextBlock Margin="0,6,0,0"
+                                                                           Style="{DynamicResource Layout.StatusText}"
+                                                                           TextWrapping="Wrap"
+                                                                           Text="{Binding NewCommentStatus}" />
+                                                                <WrapPanel Margin="0,8,0,0">
+                                                                    <Button Content="Comentar"
+                                                                            Command="{Binding SendCommentCommand}"
+                                                                            CommandParameter="{Binding NewCommentContent}"
+                                                                            IsEnabled="{Binding SendCommentCommand.RunningCommandsCount.IsZero}" />
+                                                                    <Button Margin="8,0,0,0"
+                                                                            Content="Cancelar"
+                                                                            Command="{Binding CancelCommentCommand}"
+                                                                            IsEnabled="{Binding SendCommentCommand.RunningCommandsCount.IsZero}" />
+                                                                </WrapPanel>
+                                                            </StackPanel>
+                                                        </Border>
+                                                        </StackPanel>
                                                     </Border>
 
                                                     <Border Padding="12,6"
@@ -541,7 +750,7 @@
 
                                                     <Grid x:Name="DiffCommentViewport"
                                                           Width="{Binding RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type ScrollContentPresenter}}, Path=ActualWidth}">
-                                                    <Border Margin="86,7,16,9"
+                                                    <Border Margin="110,7,16,9"
                                                             Padding="12"
                                                             BorderThickness="1,1,1,1"
                                                             BorderBrush="{DynamicResource {x:Static colors:EnvironmentColors.AccentMediumBrushKey}}"
@@ -672,6 +881,10 @@
                                                                     </Style>
                                                                 </Button.Style>
                                                             </Button>
+
+                                                            <ContentControl Margin="35,8,0,0"
+                                                                            Content="{Binding Actions}"
+                                                                            ContentTemplate="{StaticResource CommentActionsTemplate}" />
 
                                                             <Border Margin="35,10,0,0"
                                                                     Padding="10"
@@ -819,6 +1032,10 @@
                                                                                     </Button.Style>
                                                                                 </Button>
 
+                                                                                <ContentControl Margin="35,8,0,0"
+                                                                                                Content="{Binding Actions}"
+                                                                                                ContentTemplate="{StaticResource CommentActionsTemplate}" />
+
                                                                                 <Border Margin="35,8,0,0"
                                                                                         Padding="10"
                                                                                         BorderThickness="1"
@@ -926,6 +1143,7 @@
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto" />
                                         <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
                                         <RowDefinition Height="*" />
                                         <RowDefinition Height="Auto" />
                                     </Grid.RowDefinitions>
@@ -934,12 +1152,40 @@
                                                TextWrapping="Wrap"
                                                Text="{Binding PullRequestBrowser.Comments.Status}" />
 
-                                    <TextBlock Grid.Row="1"
+                                    <Border Grid.Row="1"
+                                            Margin="0,10,0,0"
+                                            Padding="10"
+                                            BorderThickness="1"
+                                            BorderBrush="{DynamicResource {x:Static styles:VsBrushes.ControlOutlineKey}}"
+                                            CornerRadius="3">
+                                        <StackPanel>
+                                            <TextBlock FontWeight="SemiBold"
+                                                       Text="Nuevo comentario (Markdown)" />
+                                            <TextBox MinHeight="64"
+                                                     Margin="0,7,0,0"
+                                                     Padding="7"
+                                                     AcceptsReturn="True"
+                                                     TextWrapping="Wrap"
+                                                     VerticalScrollBarVisibility="Auto"
+                                                     Text="{Binding PullRequestBrowser.Comments.NewCommentContent, Mode=TwoWay}" />
+                                            <TextBlock Margin="0,6,0,0"
+                                                       Style="{DynamicResource Layout.StatusText}"
+                                                       TextWrapping="Wrap"
+                                                       Text="{Binding PullRequestBrowser.Comments.NewCommentStatus}" />
+                                            <Button Margin="0,8,0,0"
+                                                    HorizontalAlignment="Left"
+                                                    Content="Comentar"
+                                                    Command="{Binding PullRequestBrowser.Comments.CreateCommentCommand}"
+                                                    CommandParameter="{Binding PullRequestBrowser.Comments.NewCommentContent}" />
+                                        </StackPanel>
+                                    </Border>
+
+                                    <TextBlock Grid.Row="2"
                                                Margin="0,12,0,6"
                                                FontWeight="SemiBold"
                                                Text="Sin resolver" />
 
-                                    <ListBox Grid.Row="2"
+                                    <ListBox Grid.Row="3"
                                              Padding="0"
                                              Background="{DynamicResource {x:Static styles:VsBrushes.ToolWindowBackgroundKey}}"
                                              BorderThickness="0"
@@ -951,7 +1197,7 @@
                                              ItemTemplate="{StaticResource PullRequestCommentTemplate}">
                                     </ListBox>
 
-                                    <Expander Grid.Row="3"
+                                    <Expander Grid.Row="4"
                                               Margin="0,10,0,0"
                                               Header="{Binding PullRequestBrowser.Comments.AllHeader}"
                                               IsExpanded="False">

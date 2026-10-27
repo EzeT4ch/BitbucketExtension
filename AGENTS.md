@@ -18,10 +18,12 @@ Run commands from the repository root:
 ```powershell
 dotnet restore CommentExtensionBitbucket.slnx  # Restore NuGet packages
 dotnet build CommentExtensionBitbucket.slnx    # Compile all solution projects
+dotnet test BitbucketAdapter.Tests               # Run adapter unit tests
+dotnet test ClientExtension.Tests               # Run extension tests (Windows)
 dotnet run --project AuthTestConsole            # Run the manual auth harness
 ```
 
-The extension targets `net10.0-windows` and may require a compatible Visual Studio installation to debug or deploy. There is currently no automated test project, linter, or CI workflow; add focused tests with non-trivial behavior changes.
+Adapters target `net8.0`; the extension and its tests target `net8.0-windows` and may require a compatible Visual Studio installation to debug or deploy. The `.slnx` format needs .NET SDK 9.0.200+. Tests use xUnit in `BitbucketAdapter.Tests/` and `ClientExtension.Tests/`; there is no linter or CI workflow yet. Add focused tests with non-trivial behavior changes. See `docs/ANALISIS.md` for current status and roadmap.
 
 ## Coding Style & Naming Conventions
 
@@ -35,4 +37,4 @@ Never commit access tokens, app passwords, OAuth client secrets, or local user-s
 
 ## Commits & Pull Requests
 
-The repository has no commit history, so no commit-message convention is established. Use concise imperative subjects, such as `Add Jira issue lookup`. Keep commits scoped to one behavior. Pull requests should describe the affected adapter or extension workflow, explain configuration changes, link the relevant work item, and include screenshots for Visual Studio UI changes. State the build or manual verification performed.
+No strict commit-message convention is established. Use concise imperative subjects, such as `Add Jira issue lookup`. Keep commits scoped to one behavior. Pull requests should describe the affected adapter or extension workflow, explain configuration changes, link the relevant work item, and include screenshots for Visual Studio UI changes. State the build or manual verification performed.

@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
 using BitbucketAdapter.Domain.PullRequests;
@@ -7,6 +8,7 @@ namespace ClientExtension.Presentation.Bitbucket.PullRequests;
 internal static class PullRequestCommentImageCache
 {
     private static readonly SemaphoreSlim WriteSemaphore = new(1, 1);
+    private static readonly ConcurrentDictionary<string, string> LocalUrlsBySource = new(StringComparer.Ordinal);
     private static readonly string CacheDirectory = Path.Combine(
         Path.GetTempPath(),
         "CommentExtensionBitbucket",
@@ -16,6 +18,19 @@ internal static class PullRequestCommentImageCache
     static PullRequestCommentImageCache()
     {
         AppDomain.CurrentDomain.ProcessExit += (_, _) => DeleteCacheDirectory();
+    }
+
+    internal static bool TryGetLocalUrl(Uri sourceUri, out string localUrl)
+    {
+        if (LocalUrlsBySource.TryGetValue(sourceUri.AbsoluteUri, out var cachedUrl) &&
+            File.Exists(new Uri(cachedUrl).LocalPath))
+        {
+            localUrl = cachedUrl;
+            return true;
+        }
+
+        localUrl = string.Empty;
+        return false;
     }
 
     internal static async Task<string> StoreAsync(
@@ -41,7 +56,9 @@ internal static class PullRequestCommentImageCache
             WriteSemaphore.Release();
         }
 
-        return new Uri(filePath).AbsoluteUri;
+        var localUrl = new Uri(filePath).AbsoluteUri;
+        LocalUrlsBySource[sourceUri.AbsoluteUri] = localUrl;
+        return localUrl;
     }
 
     private static string GetExtension(string contentType) => contentType switch
